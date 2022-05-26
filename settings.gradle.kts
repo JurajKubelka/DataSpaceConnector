@@ -195,6 +195,11 @@ include(":samples:04.3-open-telemetry:micrometer")
 include(":samples:04.3-open-telemetry:consumer")
 include(":samples:04.3-open-telemetry:provider")
 
+include(":samples:04.4-authenticated-file-transfer:consumer")
+include(":samples:04.4-authenticated-file-transfer:listener")
+include(":samples:04.4-authenticated-file-transfer:transfer-file")
+include(":samples:04.4-authenticated-file-transfer:api")
+
 include(":samples:05-file-transfer-cloud:consumer")
 include(":samples:05-file-transfer-cloud:provider")
 include(":samples:05-file-transfer-cloud:api")

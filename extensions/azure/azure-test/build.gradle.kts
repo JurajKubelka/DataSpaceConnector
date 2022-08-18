@@ -23,13 +23,14 @@ val storageBlobVersion: String by project
 val jupiterVersion: String by project
 
 dependencies {
-    api(project(":spi"))
+    api(project(":spi:control-plane:control-plane-spi"))
 
     testFixturesApi(project(":common:util"))
-    testFixturesImplementation(testFixtures(project(":common:util")))
+    testFixturesApi(project(":extensions:junit"))
     testFixturesApi("com.azure:azure-cosmos:${cosmosSdkVersion}")
     testFixturesApi("com.azure:azure-storage-blob:${storageBlobVersion}")
     testFixturesApi("org.junit.jupiter:junit-jupiter-api:${jupiterVersion}")
+    testFixturesImplementation(testFixtures(project(":common:util")))
 }
 
 publishing {

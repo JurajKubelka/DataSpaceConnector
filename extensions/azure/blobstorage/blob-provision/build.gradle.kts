@@ -17,19 +17,17 @@ plugins {
 }
 
 val storageBlobVersion: String by project
-val jodahFailsafeVersion: String by project
+val failsafeVersion: String by project
 
 
 dependencies {
-    api(project(":spi"))
+    api(project(":spi:common:core-spi"))
     api(project(":extensions:azure:blobstorage:blob-core"))
 
     implementation("com.azure:azure-storage-blob:${storageBlobVersion}")
-
-    api("net.jodah:failsafe:${jodahFailsafeVersion}")
+    implementation("dev.failsafe:failsafe:${failsafeVersion}")
 
     testImplementation(testFixtures(project(":extensions:azure:azure-test")))
-    testImplementation(testFixtures(project(":common:util")))
 }
 
 publishing {

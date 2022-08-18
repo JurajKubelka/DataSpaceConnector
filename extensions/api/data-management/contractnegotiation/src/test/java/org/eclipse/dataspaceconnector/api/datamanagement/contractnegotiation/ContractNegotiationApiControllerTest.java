@@ -20,12 +20,13 @@ import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.mod
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.ContractNegotiationDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.NegotiationInitiateRequestDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.service.ContractNegotiationService;
-import org.eclipse.dataspaceconnector.api.exception.ObjectExistsException;
-import org.eclipse.dataspaceconnector.api.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.api.query.QuerySpecDto;
 import org.eclipse.dataspaceconnector.api.result.ServiceResult;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
 import org.eclipse.dataspaceconnector.policy.model.Policy;
+import org.eclipse.dataspaceconnector.spi.exception.InvalidRequestException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectExistsException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.result.Result;
@@ -72,7 +73,7 @@ class ContractNegotiationApiControllerTest {
     @Test
     void getAll() {
         var contractNegotiation = createContractNegotiation("negotiationId");
-        when(service.query(any())).thenReturn(List.of(contractNegotiation));
+        when(service.query(any())).thenReturn(ServiceResult.success(List.of(contractNegotiation)));
         var dto = ContractNegotiationDto.Builder.newInstance().id(contractNegotiation.getId()).build();
         when(transformerRegistry.transform(any(), eq(ContractNegotiationDto.class))).thenReturn(Result.success(dto));
         when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
@@ -90,7 +91,7 @@ class ContractNegotiationApiControllerTest {
     @Test
     void getAll_filtersOutFailedTransforms() {
         var contractNegotiation = createContractNegotiation("negotiationId");
-        when(service.query(any())).thenReturn(List.of(contractNegotiation));
+        when(service.query(any())).thenReturn(ServiceResult.success(List.of(contractNegotiation)));
         when(transformerRegistry.transform(isA(ContractNegotiation.class), eq(ContractNegotiationDto.class)))
                 .thenReturn(Result.failure("failure"));
         when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
@@ -107,7 +108,7 @@ class ContractNegotiationApiControllerTest {
         when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
                 .thenReturn(Result.failure("Cannot transform"));
 
-        assertThatThrownBy(() -> controller.getNegotiations(QuerySpecDto.Builder.newInstance().build())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> controller.getNegotiations(QuerySpecDto.Builder.newInstance().build())).isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
@@ -204,7 +205,7 @@ class ContractNegotiationApiControllerTest {
                 .build();
         when(transformerRegistry.transform(any(), any())).thenReturn(Result.failure("failure"));
 
-        assertThatThrownBy(() -> controller.initiateContractNegotiation(request)).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> controller.initiateContractNegotiation(request)).isInstanceOf(InvalidRequestException.class);
     }
 
     @Test
@@ -258,13 +259,16 @@ class ContractNegotiationApiControllerTest {
     @ParameterizedTest
     @ArgumentsSource(InvalidNegotiationParameters.class)
     void initiateNegotiation_invalidRequestBody(String connectorAddress, String connectorId, String protocol, String offerId) {
+        when(transformerRegistry.transform(isA(NegotiationInitiateRequestDto.class), eq(ContractOfferRequest.class))).thenReturn(Result.failure("error"));
+
         var rq = NegotiationInitiateRequestDto.Builder.newInstance()
                 .connectorAddress(connectorAddress)
                 .connectorId(connectorId)
                 .protocol(protocol)
                 .offer(createOffer(offerId))
                 .build();
-        assertThatThrownBy(() -> controller.initiateContractNegotiation(rq)).isInstanceOf(IllegalArgumentException.class);
+
+        assertThatThrownBy(() -> controller.initiateContractNegotiation(rq)).isInstanceOf(InvalidRequestException.class);
     }
 
     private ContractNegotiation createContractNegotiation(String negotiationId) {
@@ -278,7 +282,7 @@ class ContractNegotiationApiControllerTest {
                 .providerAgentId(UUID.randomUUID().toString())
                 .consumerAgentId(UUID.randomUUID().toString())
                 .assetId(UUID.randomUUID().toString())
-                .policyId(UUID.randomUUID().toString())
+                .policy(Policy.Builder.newInstance().build())
                 .build();
     }
 

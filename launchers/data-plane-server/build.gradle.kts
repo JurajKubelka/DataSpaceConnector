@@ -13,22 +13,22 @@
  */
 
 val okHttpVersion: String by project
-val jodahFailsafeVersion: String by project
+val failsafeVersion: String by project
 
 plugins {
     `java-library`
     id("application")
-    id("com.github.johnrengelman.shadow") version "7.0.0"
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 dependencies {
-    implementation(project(":spi:web-spi"))
+    api(project(":spi:common:web-spi"))
     implementation(project(":core:base"))
     implementation(project(":core:boot"))
     implementation(project(":core:micrometer"))
     implementation(project(":extensions:http"))
     implementation(project(":extensions:filesystem:configuration-fs"))
-    implementation(project(":extensions:data-plane:data-plane-spi"))
+    implementation(project(":spi:data-plane:data-plane-spi"))
     implementation(project(":extensions:data-plane:data-plane-framework"))
     implementation(project(":extensions:data-plane:data-plane-http"))
     implementation(project(":extensions:azure:data-plane:storage"))

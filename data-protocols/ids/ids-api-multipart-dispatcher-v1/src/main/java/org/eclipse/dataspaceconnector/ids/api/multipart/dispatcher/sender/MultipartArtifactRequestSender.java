@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2020, 2021 Fraunhofer Institute for Software and Systems Engineering
+ *  Copyright (c) 2020 - 2022 Fraunhofer Institute for Software and Systems Engineering
  *
  *  This program and the accompanying materials are made available under the
  *  terms of the Apache License, Version 2.0 which is available at
@@ -18,15 +18,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.fraunhofer.iais.eis.ArtifactRequestMessageBuilder;
 import de.fraunhofer.iais.eis.DynamicAttributeToken;
 import de.fraunhofer.iais.eis.Message;
-import de.fraunhofer.iais.eis.RequestInProcessMessage;
+import de.fraunhofer.iais.eis.RequestInProcessMessageImpl;
+import de.fraunhofer.iais.eis.ResponseMessageImpl;
 import okhttp3.OkHttpClient;
-import org.eclipse.dataspaceconnector.ids.api.multipart.dispatcher.message.MultipartRequestInProcessResponse;
-import org.eclipse.dataspaceconnector.ids.spi.IdsId;
-import org.eclipse.dataspaceconnector.ids.spi.IdsType;
-import org.eclipse.dataspaceconnector.ids.spi.spec.extension.ArtifactRequestMessagePayload;
+import org.eclipse.dataspaceconnector.ids.api.multipart.dispatcher.sender.response.IdsMultipartParts;
+import org.eclipse.dataspaceconnector.ids.api.multipart.dispatcher.sender.response.MultipartResponse;
+import org.eclipse.dataspaceconnector.ids.core.util.CalendarUtil;
+import org.eclipse.dataspaceconnector.ids.spi.domain.IdsConstants;
 import org.eclipse.dataspaceconnector.ids.spi.transform.IdsTransformerRegistry;
-import org.eclipse.dataspaceconnector.ids.transform.IdsProtocol;
-import org.eclipse.dataspaceconnector.spi.EdcException;
+import org.eclipse.dataspaceconnector.ids.spi.types.IdsId;
+import org.eclipse.dataspaceconnector.ids.spi.types.IdsType;
+import org.eclipse.dataspaceconnector.ids.spi.types.container.ArtifactRequestMessagePayload;
 import org.eclipse.dataspaceconnector.spi.iam.IdentityService;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.security.Vault;
@@ -35,16 +37,18 @@ import org.jetbrains.annotations.NotNull;
 
 import java.net.URI;
 import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-import static org.eclipse.dataspaceconnector.ids.spi.IdsConstants.IDS_WEBHOOK_ADDRESS_PROPERTY;
+import static org.eclipse.dataspaceconnector.ids.api.multipart.dispatcher.sender.util.ResponseUtil.parseMultipartStringResponse;
+import static org.eclipse.dataspaceconnector.ids.spi.domain.IdsConstants.IDS_WEBHOOK_ADDRESS_PROPERTY;
 
 /**
  * IdsMultipartSender implementation for data requests. Sends IDS ArtifactRequestMessages and
  * expects an IDS RequestInProcessMessage as the response.
  */
-public class MultipartArtifactRequestSender extends IdsMultipartSender<DataRequest, MultipartRequestInProcessResponse> {
+public class MultipartArtifactRequestSender extends IdsMultipartSender<DataRequest, String> {
 
     private final Vault vault;
     private final String idsWebhookAddress;
@@ -72,33 +76,28 @@ public class MultipartArtifactRequestSender extends IdsMultipartSender<DataReque
         return request.getConnectorAddress();
     }
 
+    /**
+     * Builds an {@link de.fraunhofer.iais.eis.ArtifactRequestMessage} for the given {@link DataRequest}.
+     *
+     * @param request the request.
+     * @param token   the dynamic attribute token.
+     * @return an ArtifactRequestMessage
+     */
     @Override
     protected Message buildMessageHeader(DataRequest request, DynamicAttributeToken token) {
-        var artifactIdsId = IdsId.Builder.newInstance()
+        var artifactId = IdsId.Builder.newInstance()
                 .value(request.getAssetId())
                 .type(IdsType.ARTIFACT)
-                .build();
-        var contractIdsId = IdsId.Builder.newInstance()
+                .build().toUri();
+        var contractId = IdsId.Builder.newInstance()
                 .value(request.getContractId())
-                .type(IdsType.CONTRACT)
-                .build();
-        var artifactTransformationResult = getTransformerRegistry().transform(artifactIdsId, URI.class);
-        if (artifactTransformationResult.failed()) {
-            throw new EdcException("Failed to create artifact ID from asset.");
-        }
-
-        var contractTransformationResult = getTransformerRegistry().transform(contractIdsId, URI.class);
-        if (contractTransformationResult.failed()) {
-            throw new EdcException("Failed to create contract ID from asset.");
-        }
-
-        var artifactId = artifactTransformationResult.getContent();
-        var contractId = contractTransformationResult.getContent();
+                .type(IdsType.CONTRACT_AGREEMENT)
+                .build().toUri();
 
         var artifactRequestId = request.getId() != null ? request.getId() : UUID.randomUUID().toString();
         var message = new ArtifactRequestMessageBuilder(URI.create(artifactRequestId))
-                ._modelVersion_(IdsProtocol.INFORMATION_MODEL_VERSION)
-                //._issued_(gregorianNow()) TODO once https://github.com/eclipse-dataspaceconnector/DataSpaceConnector/issues/236 is done
+                ._modelVersion_(IdsConstants.INFORMATION_MODEL_VERSION)
+                ._issued_(CalendarUtil.gregorianNow())
                 ._securityToken_(token)
                 ._issuerConnector_(getConnectorId())
                 ._senderAgent_(getConnectorId())
@@ -113,10 +112,16 @@ public class MultipartArtifactRequestSender extends IdsMultipartSender<DataReque
         return message;
     }
 
+    /**
+     * Builds the payload for the artifact request. The payload contains the data destination and a secret key.
+     *
+     * @param request the request.
+     * @return the message payload.
+     * @throws Exception if parsing the payload fails.
+     */
     @Override
     protected String buildMessagePayload(DataRequest request) throws Exception {
-
-        ArtifactRequestMessagePayload.Builder requestPayloadBuilder = ArtifactRequestMessagePayload.Builder.newInstance()
+        var requestPayloadBuilder = ArtifactRequestMessagePayload.Builder.newInstance()
                 .dataDestination(request.getDataDestination());
 
         if (request.getDataDestination().getKeyName() != null) {
@@ -124,27 +129,23 @@ public class MultipartArtifactRequestSender extends IdsMultipartSender<DataReque
             requestPayloadBuilder = requestPayloadBuilder.secret(secret);
         }
 
-        ObjectMapper objectMapper = getObjectMapper();
-        return objectMapper.writeValueAsString(requestPayloadBuilder.build());
+        return getObjectMapper().writeValueAsString(requestPayloadBuilder.build());
+    }
+
+    /**
+     * Parses the response content.
+     *
+     * @param parts container object for response header and payload input streams.
+     * @return a MultipartResponse containing the message header and the response payload as string.
+     * @throws Exception if parsing header or payload fails.
+     */
+    @Override
+    protected MultipartResponse<String> getResponseContent(IdsMultipartParts parts) throws Exception {
+        return parseMultipartStringResponse(parts, getObjectMapper());
     }
 
     @Override
-    protected MultipartRequestInProcessResponse getResponseContent(IdsMultipartParts parts) throws Exception {
-        Message header = getObjectMapper().readValue(parts.getHeader(), Message.class);
-        String payload = null;
-        if (parts.getPayload() != null) {
-            payload = new String(parts.getPayload().readAllBytes());
-        }
-
-        if (header instanceof RequestInProcessMessage) {
-            // TODO Update TransferProcess State Machine
-        } else {
-            // TODO Update TransferProcess State Machine
-        }
-
-        return MultipartRequestInProcessResponse.Builder.newInstance()
-                .header(header)
-                .payload(payload)
-                .build();
+    protected List<Class<? extends Message>> getAllowedResponseTypes() {
+        return List.of(ResponseMessageImpl.class, RequestInProcessMessageImpl.class); // TODO remove ResponseMessage.class
     }
 }

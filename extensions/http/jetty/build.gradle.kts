@@ -24,8 +24,8 @@ val okHttpVersion: String by project
 dependencies {
     implementation("org.eclipse.jetty.websocket:websocket-jakarta-server:${jettyVersion}")
 
-    api(project(":spi:core-spi"))
-    api(project(":spi:web-spi"))
+    api(project(":spi:common:core-spi"))
+    api(project(":spi:common:web-spi"))
 
     testImplementation("com.squareup.okhttp3:okhttp:${okHttpVersion}")
     testImplementation("org.glassfish.jersey.core:jersey-server:${jerseyVersion}")
@@ -35,7 +35,7 @@ dependencies {
     testImplementation("org.glassfish.jersey.media:jersey-media-multipart:${jerseyVersion}")
     testImplementation("org.glassfish.jersey.inject:jersey-hk2:${jerseyVersion}")
     testImplementation("org.glassfish.jersey.containers:jersey-container-servlet:${jerseyVersion}")
-    testImplementation(testFixtures(project(":common:util")))
+    testImplementation(project(":extensions:junit"))
 }
 
 publishing {

@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2021 Fraunhofer Institute for Software and Systems Engineering
+ *  Copyright (c) 2021 - 2022 Fraunhofer Institute for Software and Systems Engineering
  *
  *  This program and the accompanying materials are made available under the
  *  terms of the Apache License, Version 2.0 which is available at
@@ -16,8 +16,7 @@
 package org.eclipse.dataspaceconnector.ids.api.multipart.client;
 
 import kotlin.NotImplementedError;
-import org.eclipse.dataspaceconnector.common.annotations.ComponentTest;
-import org.eclipse.dataspaceconnector.ids.core.serialization.ObjectMapperFactory;
+import org.eclipse.dataspaceconnector.common.util.junit.annotations.ComponentTest;
 import org.eclipse.dataspaceconnector.policy.model.Action;
 import org.eclipse.dataspaceconnector.policy.model.Permission;
 import org.eclipse.dataspaceconnector.policy.model.Policy;
@@ -27,6 +26,7 @@ import org.eclipse.dataspaceconnector.spi.asset.AssetSelectorExpression;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.ConsumerContractNegotiationManager;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.ContractNegotiationManager;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.ProviderContractNegotiationManager;
+import org.eclipse.dataspaceconnector.spi.contract.negotiation.store.ContractNegotiationStore;
 import org.eclipse.dataspaceconnector.spi.contract.offer.ContractOfferQuery;
 import org.eclipse.dataspaceconnector.spi.contract.offer.ContractOfferService;
 import org.eclipse.dataspaceconnector.spi.contract.offer.store.ContractDefinitionStore;
@@ -34,8 +34,10 @@ import org.eclipse.dataspaceconnector.spi.contract.validation.ContractValidation
 import org.eclipse.dataspaceconnector.spi.iam.ClaimToken;
 import org.eclipse.dataspaceconnector.spi.iam.IdentityService;
 import org.eclipse.dataspaceconnector.spi.message.MessageContext;
+import org.eclipse.dataspaceconnector.spi.message.Range;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcher;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcherRegistry;
+import org.eclipse.dataspaceconnector.spi.policy.PolicyDefinition;
 import org.eclipse.dataspaceconnector.spi.policy.store.PolicyArchive;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.response.StatusResult;
@@ -74,17 +76,18 @@ import static org.mockito.Mockito.mock;
 @Provides({
         AssetIndex.class, TransferProcessStore.class, ContractDefinitionStore.class, IdentityService.class,
         ContractNegotiationManager.class, ConsumerContractNegotiationManager.class, ProviderContractNegotiationManager.class,
-        ContractOfferService.class, ContractValidationService.class, PolicyArchive.class,
-        ObjectMapperFactory.class
+        ContractOfferService.class, ContractValidationService.class, PolicyArchive.class, ContractNegotiationStore.class
 })
 class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements ServiceExtension {
     private final List<Asset> assets;
 
     private final IdentityService identityService;
+    private final ContractNegotiationStore negotiationStore;
 
-    IdsApiMultipartDispatcherV1IntegrationTestServiceExtension(List<Asset> assets, IdentityService identityService) {
+    IdsApiMultipartDispatcherV1IntegrationTestServiceExtension(List<Asset> assets, IdentityService identityService, ContractNegotiationStore negotiationStore) {
         this.assets = Objects.requireNonNull(assets);
         this.identityService = identityService;
+        this.negotiationStore = negotiationStore;
     }
 
     private static ContractNegotiation fakeContractNegotiation() {
@@ -99,7 +102,7 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
                         .providerAgentId("provider")
                         .consumerAgentId("consumer")
                         .assetId(UUID.randomUUID().toString())
-                        .policyId("policyId")
+                        .policy(Policy.Builder.newInstance().build())
                         .contractSigningDate(Instant.now().getEpochSecond())
                         .contractStartDate(Instant.now().getEpochSecond())
                         .contractEndDate(Instant.now().plus(1, ChronoUnit.DAYS).getEpochSecond())
@@ -120,7 +123,7 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
         context.registerService(ProviderContractNegotiationManager.class, new FakeProviderContractNegotiationManager());
         context.registerService(ConsumerContractNegotiationManager.class, new FakeConsumerContractNegotiationManager());
         context.registerService(PolicyArchive.class, mock(PolicyArchive.class));
-        context.registerService(ObjectMapperFactory.class, new ObjectMapperFactory());
+        context.registerService(ContractNegotiationStore.class, negotiationStore);
     }
 
     private static class FakeAssetIndex implements AssetIndex {
@@ -156,7 +159,7 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
 
         @Override
         @NotNull
-        public Stream<ContractOffer> queryContractOffers(ContractOfferQuery query) {
+        public Stream<ContractOffer> queryContractOffers(ContractOfferQuery query, Range range) {
             return assets.stream().map(asset ->
                     ContractOffer.Builder.newInstance()
                             .policy(createEverythingAllowedPolicy())
@@ -191,11 +194,6 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
         }
 
         @Override
-        public @NotNull List<TransferProcess> nextForState(int state, int max) {
-            return Collections.EMPTY_LIST;
-        }
-
-        @Override
         public void create(TransferProcess process) {
         }
 
@@ -210,6 +208,11 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
         @Override
         public Stream<TransferProcess> findAll(QuerySpec querySpec) {
             return null;
+        }
+
+        @Override
+        public @NotNull List<TransferProcess> nextForState(int state, int max) {
+            return Collections.EMPTY_LIST;
         }
     }
 
@@ -230,11 +233,13 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
         private final List<ContractDefinition> contractDefinitions = new ArrayList<>();
 
         FakeContractDefinitionStore() {
-            Policy publicPolicy = Policy.Builder.newInstance()
-                    .permission(Permission.Builder.newInstance()
-                            .target("2")
-                            .action(Action.Builder.newInstance()
-                                    .type("USE")
+            var publicPolicy = PolicyDefinition.Builder.newInstance()
+                    .policy(Policy.Builder.newInstance()
+                            .permission(Permission.Builder.newInstance()
+                                    .target("2")
+                                    .action(Action.Builder.newInstance()
+                                            .type("USE")
+                                            .build())
                                     .build())
                             .build())
                     .build();
@@ -250,20 +255,15 @@ class IdsApiMultipartDispatcherV1IntegrationTestServiceExtension implements Serv
         }
 
         @Override
-        public @NotNull Collection<ContractDefinition> findAll() {
-            return contractDefinitions;
-        }
-
-        @Override
         public @NotNull Stream<ContractDefinition> findAll(QuerySpec spec) {
             throw new UnsupportedOperationException();
         }
-    
+
         @Override
         public ContractDefinition findById(String definitionId) {
             throw new UnsupportedOperationException();
         }
-    
+
         @Override
         public void save(Collection<ContractDefinition> definitions) {
             contractDefinitions.addAll(definitions);

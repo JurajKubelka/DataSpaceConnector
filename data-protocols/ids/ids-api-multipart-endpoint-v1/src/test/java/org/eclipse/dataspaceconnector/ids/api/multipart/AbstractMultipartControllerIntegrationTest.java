@@ -11,6 +11,8 @@
  *       Daimler TSS GmbH - Initial API and Implementation
  *       Fraunhofer Institute for Software and Systems Engineering - add methods
  *       Daimler TSS GmbH - introduce factory to create RequestInProcessMessage
+ *       Fraunhofer Institute for Software and Systems Engineering - replace object mapper
+ *       Fraunhofer Institute for Software and Systems Engineering - refactoring
  *
  */
 
@@ -20,8 +22,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import de.fraunhofer.iais.eis.Contract;
 import de.fraunhofer.iais.eis.ContractAgreementMessage;
 import de.fraunhofer.iais.eis.ContractAgreementMessageBuilder;
-import de.fraunhofer.iais.eis.ContractOfferMessage;
-import de.fraunhofer.iais.eis.ContractOfferMessageBuilder;
 import de.fraunhofer.iais.eis.ContractRejectionMessage;
 import de.fraunhofer.iais.eis.ContractRejectionMessageBuilder;
 import de.fraunhofer.iais.eis.ContractRequestMessage;
@@ -41,11 +41,11 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import org.eclipse.dataspaceconnector.ids.api.multipart.controller.MultipartController;
 import org.eclipse.dataspaceconnector.ids.api.multipart.message.MultipartResponse;
-import org.eclipse.dataspaceconnector.ids.core.serialization.ObjectMapperFactory;
-import org.eclipse.dataspaceconnector.ids.spi.IdsId;
-import org.eclipse.dataspaceconnector.ids.spi.IdsIdParser;
-import org.eclipse.dataspaceconnector.junit.launcher.EdcExtension;
+import org.eclipse.dataspaceconnector.ids.core.serialization.IdsTypeManagerUtil;
+import org.eclipse.dataspaceconnector.ids.spi.types.IdsId;
+import org.eclipse.dataspaceconnector.junit.extensions.EdcExtension;
 import org.eclipse.dataspaceconnector.spi.system.ServiceExtension;
+import org.eclipse.dataspaceconnector.spi.types.TypeManager;
 import org.eclipse.dataspaceconnector.spi.types.domain.asset.Asset;
 import org.glassfish.jersey.media.multipart.ContentDisposition;
 import org.junit.jupiter.api.AfterEach;
@@ -60,23 +60,17 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.eclipse.dataspaceconnector.common.testfixtures.TestUtils.getFreePort;
-import static org.eclipse.dataspaceconnector.ids.spi.IdsConstants.IDS_WEBHOOK_ADDRESS_PROPERTY;
+import static org.eclipse.dataspaceconnector.ids.spi.domain.IdsConstants.IDS_WEBHOOK_ADDRESS_PROPERTY;
+import static org.eclipse.dataspaceconnector.junit.testfixtures.TestUtils.getFreePort;
 
 @ExtendWith(EdcExtension.class)
 abstract class AbstractMultipartControllerIntegrationTest {
     public static final String HEADER = "header";
     public static final String PAYLOAD = "payload";
-    // TODO needs to be replaced by an objectmapper capable to understand IDS JSON-LD
-    //      once https://github.com/eclipse-dataspaceconnector/DataSpaceConnector/issues/236 is done
-    private static ObjectMapper objectMapper;
     private static final AtomicReference<Integer> PORT = new AtomicReference<>();
     private static final AtomicReference<Integer> IDS_PORT = new AtomicReference<>();
     private static final List<Asset> ASSETS = new LinkedList<>();
-    
-    static {
-        objectMapper = new ObjectMapperFactory().getObjectMapper();
-    }
+    private ObjectMapper objectMapper;
 
     @AfterEach
     void after() {
@@ -98,6 +92,8 @@ abstract class AbstractMultipartControllerIntegrationTest {
         for (Map.Entry<String, String> entry : getSystemProperties().entrySet()) {
             System.setProperty(entry.getKey(), entry.getValue());
         }
+
+        objectMapper = getCustomizedObjectMapper();
 
         extension.registerSystemExtension(ServiceExtension.class, new IdsApiMultipartEndpointV1IntegrationTestServiceExtension(ASSETS));
     }
@@ -139,20 +135,20 @@ abstract class AbstractMultipartControllerIntegrationTest {
     protected DescriptionRequestMessage getDescriptionRequestMessage(IdsId idsId) {
         DescriptionRequestMessageBuilder builder = new DescriptionRequestMessageBuilder()
                 ._securityToken_(getDynamicAttributeToken())
-                ._issuerConnector_(URI.create("issuerConnector"));
+                ._issuerConnector_(URI.create("issuerConnector"))
+                ._senderAgent_(URI.create("senderAgent"));
 
         if (idsId != null) {
-            builder._requestedElement_(
-                    URI.create(String.join(IdsIdParser.DELIMITER, IdsIdParser.SCHEME, idsId.getType().getValue(), idsId.getValue())));
+            builder._requestedElement_(idsId.toUri());
         }
         return builder.build();
     }
 
     protected ContractRequestMessage getContractRequestMessage() {
         var message = new ContractRequestMessageBuilder()
-                ._correlationMessage_(URI.create("correlationId"))
+                ._correlationMessage_(URI.create("urn:message:1"))
                 ._securityToken_(getDynamicAttributeToken())
-                ._senderAgent_(URI.create("sender"))
+                ._senderAgent_(URI.create("senderAgent"))
                 ._issuerConnector_(URI.create("issuerConnector"))
                 .build();
         message.setProperty(IDS_WEBHOOK_ADDRESS_PROPERTY, "http://someUrl");
@@ -161,27 +157,20 @@ abstract class AbstractMultipartControllerIntegrationTest {
 
     protected ContractAgreementMessage getContractAgreementMessage() {
         return new ContractAgreementMessageBuilder()
-                ._correlationMessage_(URI.create("correlationId"))
+                ._correlationMessage_(URI.create("urn:message:1"))
                 ._securityToken_(getDynamicAttributeToken())
                 ._issuerConnector_(URI.create("issuerConnector"))
+                ._senderAgent_(URI.create("senderAgent"))
                 .build();
     }
 
     protected ContractRejectionMessage getContractRejectionMessage() {
         return new ContractRejectionMessageBuilder()
-                ._correlationMessage_(URI.create("correlationId"))
-                ._transferContract_(URI.create("contractId"))
+                ._correlationMessage_(URI.create("urn:message:1"))
+                ._transferContract_(URI.create("urn:contractagreement:1"))
                 ._securityToken_(getDynamicAttributeToken())
                 ._issuerConnector_(URI.create("issuerConnector"))
-                .build();
-    }
-
-    protected ContractOfferMessage getContractOfferMessage() {
-        return new ContractOfferMessageBuilder()
-                ._correlationMessage_(URI.create("correlationId"))
-                ._senderAgent_(URI.create("sender"))
-                ._securityToken_(getDynamicAttributeToken())
-                ._issuerConnector_(URI.create("issuerConnector"))
+                ._senderAgent_(URI.create("senderAgent"))
                 .build();
     }
 
@@ -241,7 +230,7 @@ abstract class AbstractMultipartControllerIntegrationTest {
                 }
 
                 if (multipartName.equalsIgnoreCase(HEADER)) {
-                    header = objectMapper.readValue(part.body().inputStream(), Message.class);
+                    header = objectMapper.readValue(part.body().readUtf8(), Message.class);
                 } else if (multipartName.equalsIgnoreCase(PAYLOAD)) {
                     payload = part.body().readByteArray();
                 }
@@ -286,8 +275,7 @@ abstract class AbstractMultipartControllerIntegrationTest {
                 .add("Content-Disposition", "form-data; name=\"header\"")
                 .build();
 
-        RequestBody requestBody = RequestBody.create(
-                toJson(message),
+        RequestBody requestBody = RequestBody.create(toJson(message),
                 okhttp3.MediaType.get(MediaType.APPLICATION_JSON));
 
         return MultipartBody.Part.create(headers, requestBody);
@@ -299,8 +287,7 @@ abstract class AbstractMultipartControllerIntegrationTest {
                 .add("Content-Disposition", "form-data; name=\"payload\"")
                 .build();
 
-        RequestBody requestBody = RequestBody.create(
-                toJson(contract),
+        RequestBody requestBody = RequestBody.create(toJson(contract),
                 okhttp3.MediaType.get(MediaType.APPLICATION_JSON));
 
         return MultipartBody.Part.create(headers, requestBody);
@@ -322,5 +309,9 @@ abstract class AbstractMultipartControllerIntegrationTest {
         public byte[] getContent() {
             return content;
         }
+    }
+
+    private ObjectMapper getCustomizedObjectMapper() {
+        return IdsTypeManagerUtil.getIdsObjectMapper(new TypeManager());
     }
 }

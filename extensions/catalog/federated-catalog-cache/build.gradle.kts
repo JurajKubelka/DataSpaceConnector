@@ -18,12 +18,15 @@ plugins {
 }
 
 val rsApi: String by project
-val jodahFailsafeVersion: String by project
+val failsafeVersion: String by project
 val okHttpVersion: String by project
+val awaitility: String by project
+
 
 dependencies {
-    api(project(":spi:core-spi"))
-    api(project(":extensions:catalog:federated-catalog-spi"))
+    api(project(":spi:common:core-spi"))
+    api(project(":spi:common:web-spi"))
+    api(project(":spi:federated-catalog:federated-catalog-spi"))
 
     implementation(project(":common:util"))
     implementation(project(":core:base"))
@@ -31,13 +34,15 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:${okHttpVersion}")
 
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
-    implementation("net.jodah:failsafe:${jodahFailsafeVersion}")
+    implementation("dev.failsafe:failsafe:${failsafeVersion}")
 
     // required for integration test
-    testImplementation(testFixtures(project(":launchers:junit")))
-    testImplementation(testFixtures(project(":common:util")))
+    testImplementation(project(":extensions:junit"))
+
     testImplementation(project(":extensions:http"))
     testImplementation(project(":data-protocols:ids:ids-spi"))
+    testImplementation("org.awaitility:awaitility:${awaitility}")
+
 }
 
 publishing {

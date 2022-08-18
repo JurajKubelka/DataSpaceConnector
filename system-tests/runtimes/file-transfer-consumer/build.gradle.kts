@@ -16,31 +16,20 @@
 plugins {
     `java-library`
     id("application")
-    id("com.github.johnrengelman.shadow") version "7.0.0"
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 val rsApi: String by project
 
 dependencies {
     implementation(project(":core"))
-
-
-
-
-
-    implementation(project(":extensions:api:observability"))
-
-    implementation(project(":extensions:filesystem:configuration-fs"))
-    implementation(project(":extensions:iam:iam-mock"))
+    implementation(project(":common:util"))
+    implementation(project(":data-protocols:ids"))
 
     implementation(project(":extensions:api:data-management"))
-
-    implementation(project(":data-protocols:ids")) {
-        exclude("org.eclipse.dataspaceconnector","ids-token-validation")
-    }
-
-    api(project(":spi"))
-    implementation(project(":common:util"))
+    implementation(project(":extensions:api:observability"))
+    implementation(project(":extensions:filesystem:configuration-fs"))
+    implementation(project(":extensions:iam:iam-mock"))
 
     api("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
 }

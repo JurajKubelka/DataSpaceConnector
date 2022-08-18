@@ -18,10 +18,9 @@ plugins {
 
 
 dependencies {
-    api(project(":spi:core-spi"))
-    api(project(":extensions:transaction:transaction-spi"))
-    api(project(":extensions:transaction:transaction-datasource-spi"))
-
+    api(project(":spi:common:core-spi"))
+    api(project(":spi:common:transaction-spi"))
+    implementation(project(":spi:common:transaction-datasource-spi"))
 }
 
 publishing {

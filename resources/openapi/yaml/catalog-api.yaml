@@ -8,6 +8,31 @@ paths:
         name: providerUrl
         schema:
           type: string
+      - in: query
+        name: offset
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: limit
+        schema:
+          type: integer
+          format: int32
+      - in: query
+        name: filter
+        schema:
+          type: string
+      - in: query
+        name: sort
+        schema:
+          type: string
+          enum:
+          - ASC
+          - DESC
+      - in: query
+        name: sortField
+        schema:
+          type: string
       responses:
         default:
           content:
@@ -31,6 +56,11 @@ components:
     Asset:
       type: object
       properties:
+        createdAt:
+          type: integer
+          format: int64
+        id:
+          type: string
         properties:
           type: object
           additionalProperties:
@@ -79,8 +109,6 @@ components:
           format: date-time
         policy:
           $ref: '#/components/schemas/Policy'
-        policyId:
-          type: string
         provider:
           type: string
           format: uri
@@ -158,8 +186,6 @@ components:
           items:
             $ref: '#/components/schemas/Prohibition'
         target:
-          type: string
-        uid:
           type: string
     Prohibition:
       type: object

@@ -16,7 +16,7 @@ package org.eclipse.dataspaceconnector.api.datamanagement.transferprocess;
 
 import io.restassured.specification.RequestSpecification;
 import org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.model.TransferRequestDto;
-import org.eclipse.dataspaceconnector.junit.launcher.EdcExtension;
+import org.eclipse.dataspaceconnector.junit.extensions.EdcExtension;
 import org.eclipse.dataspaceconnector.spi.transfer.store.TransferProcessStore;
 import org.eclipse.dataspaceconnector.spi.types.domain.DataAddress;
 import org.eclipse.dataspaceconnector.spi.types.domain.transfer.DataRequest;
@@ -30,7 +30,7 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.dataspaceconnector.common.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.dataspaceconnector.junit.testfixtures.TestUtils.getFreePort;
 import static org.eclipse.dataspaceconnector.spi.types.domain.transfer.TransferProcessStates.COMPLETED;
 import static org.eclipse.dataspaceconnector.spi.types.domain.transfer.TransferProcessStates.INITIAL;
 import static org.eclipse.dataspaceconnector.spi.types.domain.transfer.TransferProcessStates.IN_PROGRESS;
@@ -47,6 +47,8 @@ class TransferProcessApiControllerIntegrationTest {
     @BeforeEach
     void setUp(EdcExtension extension) {
         extension.setConfiguration(Map.of(
+                "web.http.port", String.valueOf(getFreePort()),
+                "web.http.path", "/api",
                 "web.http.data.port", String.valueOf(port),
                 "web.http.data.path", "/api/v1/data",
                 "edc.api.auth.key", authKey

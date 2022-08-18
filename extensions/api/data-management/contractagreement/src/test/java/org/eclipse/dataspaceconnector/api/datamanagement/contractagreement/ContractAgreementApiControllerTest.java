@@ -17,9 +17,12 @@ package org.eclipse.dataspaceconnector.api.datamanagement.contractagreement;
 
 import org.eclipse.dataspaceconnector.api.datamanagement.contractagreement.model.ContractAgreementDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractagreement.service.ContractAgreementService;
-import org.eclipse.dataspaceconnector.api.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.api.query.QuerySpecDto;
+import org.eclipse.dataspaceconnector.api.result.ServiceResult;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
+import org.eclipse.dataspaceconnector.policy.model.Policy;
+import org.eclipse.dataspaceconnector.spi.exception.InvalidRequestException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.result.Result;
@@ -56,7 +59,7 @@ class ContractAgreementApiControllerTest {
     @Test
     void getAll() {
         var contractAgreement = createContractAgreement();
-        when(service.query(any())).thenReturn(List.of(contractAgreement));
+        when(service.query(any())).thenReturn(ServiceResult.success(List.of(contractAgreement)));
         var dto = ContractAgreementDto.Builder.newInstance().id(contractAgreement.getId()).build();
         when(transformerRegistry.transform(any(), eq(ContractAgreementDto.class))).thenReturn(Result.success(dto));
         when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
@@ -73,7 +76,7 @@ class ContractAgreementApiControllerTest {
     @Test
     void getAll_filtersOutFailedTransforms() {
         var contractAgreement = createContractAgreement();
-        when(service.query(any())).thenReturn(List.of(contractAgreement));
+        when(service.query(any())).thenReturn(ServiceResult.success(List.of(contractAgreement)));
         when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
                 .thenReturn(Result.success(QuerySpec.Builder.newInstance().offset(10).build()));
         when(transformerRegistry.transform(isA(ContractAgreement.class), eq(ContractAgreementDto.class)))
@@ -89,10 +92,25 @@ class ContractAgreementApiControllerTest {
     void getAll_throwsExceptionIfQuerySpecTransformFails() {
         when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
                 .thenReturn(Result.failure("Cannot transform"));
+        var querySpecDto = QuerySpecDto.Builder.newInstance().build();
 
-        assertThatThrownBy(() -> controller.getAllAgreements(QuerySpecDto.Builder.newInstance().build())).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> controller.getAllAgreements(querySpecDto)).isInstanceOf(InvalidRequestException.class);
     }
 
+    @Test
+    void getAll_withInvalidQuery_shouldThrowException() {
+        var contractAgreement = createContractAgreement();
+        when(service.query(any())).thenReturn(ServiceResult.badRequest("test error message"));
+
+        var dto = ContractAgreementDto.Builder.newInstance().id(contractAgreement.getId()).build();
+        when(transformerRegistry.transform(any(), eq(ContractAgreementDto.class))).thenReturn(Result.success(dto));
+        when(transformerRegistry.transform(isA(QuerySpecDto.class), eq(QuerySpec.class)))
+                .thenReturn(Result.success(QuerySpec.Builder.newInstance().offset(10).build()));
+        var querySpec = QuerySpecDto.Builder.newInstance().filter("invalid=foobar").build();
+
+        assertThatThrownBy(() -> controller.getAllAgreements(querySpec)).isInstanceOf(InvalidRequestException.class);
+
+    }
 
     @Test
     void getContractDef_found() {
@@ -129,7 +147,7 @@ class ContractAgreementApiControllerTest {
                 .consumerAgentId(UUID.randomUUID().toString())
                 .providerAgentId(UUID.randomUUID().toString())
                 .assetId(UUID.randomUUID().toString())
-                .policyId("policyId")
+                .policy(Policy.Builder.newInstance().build())
                 .build();
     }
 

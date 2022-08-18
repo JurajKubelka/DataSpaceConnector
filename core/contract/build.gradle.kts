@@ -9,10 +9,12 @@
 *
 *  Contributors:
 *       Daimler TSS GmbH - Initial API and Implementation
+*       Microsoft Corporation - introduced Awaitility
 *
 */
 
 val openTelemetryVersion: String by project
+val awaitility: String by project
 
 plugins {
     `java-library`
@@ -20,15 +22,15 @@ plugins {
 }
 
 dependencies {
-    api(project(":spi:contract-spi"))
+    api(project(":spi:control-plane:contract-spi"))
 
     implementation(project(":common:state-machine-lib"))
     implementation("io.opentelemetry:opentelemetry-extension-annotations:${openTelemetryVersion}")
 
     testImplementation(project(":core:defaults"))
-    
+    testImplementation(project(":extensions:junit"))
     testImplementation(testFixtures(project(":common:util")))
-    testImplementation(testFixtures(project(":launchers:junit")))
+    testImplementation("org.awaitility:awaitility:${awaitility}")
 }
 
 publishing {

@@ -19,10 +19,7 @@ plugins {
 val awsVersion: String by project
 
 dependencies {
-    api(project(":spi"))
-
     api(project(":extensions:aws:s3:s3-provision"))
-    api(project(":extensions:aws:s3:s3-data-operator"))
     api(project(":extensions:aws:s3:s3-core"))
 }
 

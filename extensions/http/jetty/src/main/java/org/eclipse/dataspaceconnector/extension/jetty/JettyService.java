@@ -10,6 +10,7 @@
  *  Contributors:
  *       Microsoft Corporation - initial API and implementation
  *       Fraunhofer Institute for Software and Systems Engineering - added method
+ *       ZF Friedrichshafen AG - Set connector name
  *
  */
 
@@ -81,20 +82,24 @@ public class JettyService implements WebServer {
                 if (Arrays.stream(server.getConnectors()).anyMatch(c -> ((ServerConnector) c).getPort() == mapping.getPort())) {
                     throw new IllegalArgumentException("A binding for port " + mapping.getPort() + " already exists");
                 }
+
                 if (keyStore != null) {
                     connector = httpsServerConnector(mapping.getPort());
                     monitor.info("HTTPS context '" + mapping.getName() + "' listening on port " + mapping.getPort());
                 } else {
-                    connector = httpServerConnector(mapping.getPort());
+                    connector = httpServerConnector();
                     monitor.info("HTTP context '" + mapping.getName() + "' listening on port " + mapping.getPort());
                 }
+
                 connector.setName(mapping.getName());
+                connector.setPort(mapping.getPort());
+
+                configure(connector);
                 server.addConnector(connector);
 
-                ServletContextHandler handler = createHandler(mapping);
+                var handler = createHandler(mapping);
                 handlers.put(mapping.getPath(), handler);
             });
-            server.setErrorHandler(new JettyErrorHandler());
             server.setHandler(new ContextHandlerCollection(handlers.values().toArray(ServletContextHandler[]::new)));
             server.start();
             monitor.debug("Port mappings: " + configuration.getPortMappings().stream().map(PortMapping::toString).collect(Collectors.joining(", ")));
@@ -116,7 +121,7 @@ public class JettyService implements WebServer {
     }
 
     public void registerServlet(String contextName, Servlet servlet) {
-        ServletHolder servletHolder = new ServletHolder(Source.EMBEDDED);
+        var servletHolder = new ServletHolder(Source.EMBEDDED);
         servletHolder.setName("EDC-" + contextName); //must be unique
         servletHolder.setServlet(servlet);
         servletHolder.setInitOrder(1);
@@ -146,10 +151,6 @@ public class JettyService implements WebServer {
             return;
         }
         configuration.getPortMappings().add(portMapping);
-    }
-
-    public ServletContextHandler getHandler(String path) {
-        return handlers.get(path);
     }
 
     public void addConnectorConfigurationCallback(Consumer<ServerConnector> callback) {
@@ -182,18 +183,12 @@ public class JettyService implements WebServer {
 
         var httpConnectionFactory = new HttpConnectionFactory(httpsConfiguration);
         var sslConnectionFactory = new SslConnectionFactory(contextFactory, HttpVersion.HTTP_1_1.asString());
-        var sslConnector = new ServerConnector(server, sslConnectionFactory, httpConnectionFactory);
-        sslConnector.setPort(port);
-        configure(sslConnector);
-        return sslConnector;
+        return new ServerConnector(server, sslConnectionFactory, httpConnectionFactory);
     }
 
     @NotNull
-    private ServerConnector httpServerConnector(int port) {
-        ServerConnector connector = new ServerConnector(server, httpConnectionFactory());
-        connector.setPort(port);
-        configure(connector);
-        return connector;
+    private ServerConnector httpServerConnector() {
+        return new ServerConnector(server, httpConnectionFactory());
     }
 
     private void configure(ServerConnector connector) {

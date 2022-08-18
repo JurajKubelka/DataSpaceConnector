@@ -9,11 +9,15 @@
  *
  *  Contributors:
  *       Microsoft Corporation - initial API and implementation
+ *       Bayerische Motoren Werke Aktiengesellschaft (BMW AG) - improvements
  *
  */
 
 package org.eclipse.dataspaceconnector.extension.jersey;
 
+import org.eclipse.dataspaceconnector.extension.jersey.mapper.EdcApiExceptionMapper;
+import org.eclipse.dataspaceconnector.extension.jersey.mapper.UnexpectedExceptionMapper;
+import org.eclipse.dataspaceconnector.extension.jersey.mapper.ValidationExceptionMapper;
 import org.eclipse.dataspaceconnector.extension.jetty.JettyService;
 import org.eclipse.dataspaceconnector.spi.EdcException;
 import org.eclipse.dataspaceconnector.spi.WebService;
@@ -28,6 +32,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 import static java.util.stream.Collectors.toSet;
 import static org.glassfish.jersey.server.ServerProperties.WADL_FEATURE_DISABLE;
@@ -40,12 +45,13 @@ public class JerseyRestService implements WebService {
     private final Monitor monitor;
 
     private final Map<String, List<Object>> controllers = new HashMap<>();
-    private final CorsFilterConfiguration corsConfiguration;
+    private final JerseyConfiguration configuration;
+    private final List<Supplier<Object>> additionalInstances = new ArrayList<>();
 
-    public JerseyRestService(JettyService jettyService, TypeManager typeManager, CorsFilterConfiguration corsConfiguration, Monitor monitor) {
+    public JerseyRestService(JettyService jettyService, TypeManager typeManager, JerseyConfiguration configuration, Monitor monitor) {
         this.jettyService = jettyService;
         this.typeManager = typeManager;
-        this.corsConfiguration = corsConfiguration;
+        this.configuration = configuration;
         this.monitor = monitor;
     }
 
@@ -59,6 +65,10 @@ public class JerseyRestService implements WebService {
     public void registerResource(String contextAlias, Object resource) {
         controllers.computeIfAbsent(contextAlias, s -> new ArrayList<>())
                 .add(resource);
+    }
+
+    void registerInstance(Supplier<Object> instance) {
+        additionalInstances.add(instance);
     }
 
     public void start() {
@@ -81,8 +91,15 @@ public class JerseyRestService implements WebService {
         resourceConfig.registerInstances(new Binder());
         resourceConfig.registerInstances(new TypeManagerContextResolver(typeManager));
 
-        if (corsConfiguration.isCorsEnabled()) {
-            resourceConfig.register(new CorsFilter(corsConfiguration));
+        resourceConfig.registerInstances(new EdcApiExceptionMapper());
+        resourceConfig.registerInstances(new ValidationExceptionMapper());
+        resourceConfig.registerInstances(new UnexpectedExceptionMapper(monitor));
+
+        additionalInstances.forEach(supplier -> resourceConfig.registerInstances(supplier.get()));
+
+
+        if (configuration.isCorsEnabled()) {
+            resourceConfig.register(new CorsFilter(configuration));
         }
         resourceConfig.register(MultiPartFeature.class);
 

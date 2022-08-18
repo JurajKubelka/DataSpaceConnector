@@ -22,12 +22,10 @@ plugins {
 }
 
 dependencies {
-    api(project(":spi"))
     api(project(":data-protocols:ids:ids-spi"))
     api(project(":data-protocols:ids:ids-core"))
     api(project(":data-protocols:ids:ids-transform-v1"))
     implementation(project(":data-protocols:ids:ids-api-configuration"))
-    implementation(project(":extensions:http"))
 
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
     implementation("org.glassfish.jersey.media:jersey-media-multipart:${jerseyVersion}")
@@ -37,8 +35,9 @@ dependencies {
     testImplementation(project(":core:defaults"))
 
     testImplementation(project(":data-protocols:ids:ids-api-multipart-endpoint-v1"))
+
+    testImplementation(project(":extensions:junit"))
     testImplementation(testFixtures(project(":common:util")))
-    testImplementation(testFixtures(project(":launchers:junit")))
 }
 
 publishing {

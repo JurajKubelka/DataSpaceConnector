@@ -11,6 +11,8 @@
  *       Microsoft Corporation - initial API and implementation
  *
  */
+import org.hidetake.gradle.swagger.generator.GenerateSwaggerUI
+
 
 plugins {
     `java-library`
@@ -20,15 +22,22 @@ plugins {
     signing
     id("com.rameshkp.openapi-merger-gradle-plugin") version "1.0.4"
     id("org.eclipse.dataspaceconnector.module-names")
-    id("com.autonomousapps.dependency-analysis") version "1.1.0" apply (false)
+    id("com.autonomousapps.dependency-analysis") version "1.12.0" apply (false)
     id("org.gradle.crypto.checksum") version "1.4.0"
+    id("io.github.gradle-nexus.publish-plugin") version "1.1.0"
+    id("org.hidetake.swagger.generator") version "2.19.2"
 }
 
 repositories {
     mavenCentral()
 }
 
+dependencies {
+    "swaggerCodegen"("org.openapitools:openapi-generator-cli:6.0.1")
+    "swaggerUI"("org.webjars:swagger-ui:4.11.1")
+}
 
+val datafaker: String by project
 val jetBrainsAnnotationsVersion: String by project
 val jacksonVersion: String by project
 val javaVersion: String by project
@@ -37,7 +46,6 @@ val mockitoVersion: String by project
 val assertj: String by project
 val rsApi: String by project
 val swagger: String by project
-val faker: String by project
 
 val edcDeveloperId: String by project
 val edcDeveloperName: String by project
@@ -45,20 +53,15 @@ val edcDeveloperEmail: String by project
 val edcScmConnection: String by project
 val edcWebsiteUrl: String by project
 val edcScmUrl: String by project
-val groupId: String = "org.eclipse.dataspaceconnector"
-var edcVersion: String = "0.0.1-SNAPSHOT"
+val groupId: String by project
+val defaultVersion: String by project
 
-if (project.version == "unspecified") {
-    logger.warn("No version was specified, setting default 0.0.1-SNAPSHOT")
-    logger.warn("If you want to set a version, use the -Pversion=X.Y.Z parameter")
-    logger.warn("")
-} else {
-    edcVersion = project.version as String
-}
+// required by the nexus publishing plugin
+val projectVersion: String = (project.findProperty("edcVersion") ?: defaultVersion) as String
 
 var deployUrl = "https://oss.sonatype.org/service/local/staging/deploy/maven2/"
 
-if (edcVersion.contains("SNAPSHOT")) {
+if (projectVersion.contains("SNAPSHOT")) {
     deployUrl = "https://oss.sonatype.org/content/repositories/snapshots/"
 }
 
@@ -131,6 +134,7 @@ allprojects {
     checkstyle {
         toolVersion = "9.0"
         configFile = rootProject.file("resources/edc-checkstyle-config.xml")
+        configDirectory.set(rootProject.file("resources"))
         maxErrors = 0 // does not tolerate errors
     }
 
@@ -157,7 +161,7 @@ allprojects {
 
     pluginManager.withPlugin("java-library") {
         group = groupId
-        version = edcVersion
+        version = projectVersion
 
         dependencies {
             api("org.jetbrains:annotations:${jetBrainsAnnotationsVersion}")
@@ -171,7 +175,7 @@ allprojects {
             testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:${jupiterVersion}")
             testImplementation("org.mockito:mockito-core:${mockitoVersion}")
             testImplementation("org.assertj:assertj-core:${assertj}")
-            testImplementation("com.github.javafaker:javafaker:${faker}")
+            testImplementation("net.datafaker:datafaker:${datafaker}")
         }
 
         if (!project.hasProperty("skip.signing")) {
@@ -197,8 +201,6 @@ allprojects {
         }
 
     }
-
-
 
     pluginManager.withPlugin("io.swagger.core.v3.swagger-gradle-plugin") {
 
@@ -227,13 +229,13 @@ allprojects {
 
     tasks.withType<Test> {
         // Target all type of test e.g. -DrunAllTests="true"
-        val runAllTests: String = System.getProperty("runAllTests", "false");
+        val runAllTests: String = System.getProperty("runAllTests", "false")
         if (runAllTests == "true") {
             useJUnitPlatform()
         } else {
             // Target specific set of tests by specifying junit tags on command-line e.g. -DincludeTags="tag-name1,tag-name2"
-            val includeTagProperty = System.getProperty("includeTags");
-            val includeTags: Array<String> = includeTagProperty?.split(",")?.toTypedArray() ?: emptyArray();
+            val includeTagProperty = System.getProperty("includeTags")
+            val includeTags: Array<String> = includeTagProperty?.split(",")?.toTypedArray() ?: emptyArray()
 
             if (includeTags.isNotEmpty()) {
                 useJUnitPlatform {
@@ -261,7 +263,7 @@ allprojects {
         reports {
             // lets not generate any reports because that is done from within the Github Actions workflow
             html.required.set(false)
-            xml.required.set(false)
+            xml.required.set(true)
         }
     }
 
@@ -329,7 +331,7 @@ if (project.hasProperty("dependency.analysis")) {
                 onUnusedDependencies {
                     exclude(
                         // dependencies declared at the root level for all modules
-                        "com.github.javafaker:javafaker",
+                        "net.datafaker:datafaker",
                         "org.assertj:assertj-core",
                         "org.junit.jupiter:junit-jupiter-api",
                         "org.junit.jupiter:junit-jupiter-params",
@@ -340,7 +342,7 @@ if (project.hasProperty("dependency.analysis")) {
                     exclude(
                         // some common dependencies are intentionally exported by core:base for simplicity
                         "com.squareup.okhttp3:okhttp",
-                        "net.jodah:failsafe",
+                        "dev.failsafe:failsafe",
                     )
                 }
                 onUsedTransitiveDependencies {
@@ -358,3 +360,23 @@ if (project.hasProperty("dependency.analysis")) {
     }
 }
 
+nexusPublishing {
+    repositories {
+        sonatype {
+            nexusUrl.set(uri("https://oss.sonatype.org/service/local/"))
+            snapshotRepositoryUrl.set(uri("https://oss.sonatype.org/content/repositories/snapshots/"))
+            username.set(System.getenv("OSSRH_USER") ?: return@sonatype)
+            password.set(System.getenv("OSSRH_PASSWORD") ?: return@sonatype)
+        }
+    }
+}
+
+swaggerSources {
+    create("edc").apply {
+        setInputFile(file("./resources/openapi/openapi.yaml"))
+        ui(closureOf<GenerateSwaggerUI> {
+            outputDir = file("docs/swaggerui")
+            wipeOutputDir = true
+        })
+    }
+}

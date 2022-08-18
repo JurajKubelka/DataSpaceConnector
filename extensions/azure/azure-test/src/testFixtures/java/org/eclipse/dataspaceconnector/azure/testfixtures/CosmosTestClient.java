@@ -43,7 +43,7 @@ public interface CosmosTestClient {
     static CosmosClient createClient() {
         var cosmosKey = propOrEnv("COSMOS_KEY", null);
         if (!StringUtils.isNullOrBlank(cosmosKey)) {
-            String endpoint = propOrEnv("COSMOS_URL", "https://cosmos-itest.documents.azure.com:443/");
+            String endpoint = propOrEnv("COSMOS_URL", "https://edcintdev-cosmosdb.documents.azure.com:443/");
             return azureClient(cosmosKey, endpoint);
         } else {
             return localClient();
@@ -116,15 +116,15 @@ public interface CosmosTestClient {
     }
 
     private static void setUpTrustStoreWithCertificates(X509Certificate[] certs) {
+        var trustStorePath =
+                System.getProperty("javax.net.ssl.trustStore",
+                        System.getProperty("java.home") + separator + "lib" + separator + "security" + separator + "cacerts");
 
-        try {
-            var trustStorePath =
-                    System.getProperty("javax.net.ssl.trustStore",
-                            System.getProperty("java.home") + separator + "lib" + separator + "security" + separator + "cacerts");
-            var trustStorePassword = System.getProperty("javax.net.ssl.trustStorePassword", "changeit").toCharArray();
+        try (var stream = new FileInputStream(trustStorePath)) {
+            var trustStorePassword = propOrEnv("javax.net.ssl.trustStorePassword", "changeit").toCharArray();
 
             var trustStore = KeyStore.getInstance(KeyStore.getDefaultType());
-            trustStore.load(new FileInputStream(trustStorePath), trustStorePassword);
+            trustStore.load(stream, trustStorePassword);
 
             var certCounter = 0;
             for (var cert : certs) {

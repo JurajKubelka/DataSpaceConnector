@@ -14,6 +14,7 @@
 
 package org.eclipse.dataspaceconnector.api.datamanagement.contractagreement.service;
 
+import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.store.ContractNegotiationStore;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.transaction.NoopTransactionContext;
@@ -61,7 +62,8 @@ class ContractAgreementServiceImplTest {
 
         var result = service.query(QuerySpec.none());
 
-        assertThat(result).hasSize(1).first().matches(it -> it.getId().equals("agreementId"));
+        assertThat(result.succeeded()).isTrue();
+        assertThat(result.getContent()).hasSize(1).first().matches(it -> it.getId().equals("agreementId"));
     }
 
     private ContractAgreement createContractAgreement(String agreementId) {
@@ -70,7 +72,7 @@ class ContractAgreementServiceImplTest {
                 .providerAgentId(UUID.randomUUID().toString())
                 .consumerAgentId(UUID.randomUUID().toString())
                 .assetId(UUID.randomUUID().toString())
-                .policyId("policyId")
+                .policy(Policy.Builder.newInstance().build())
                 .build();
     }
 }

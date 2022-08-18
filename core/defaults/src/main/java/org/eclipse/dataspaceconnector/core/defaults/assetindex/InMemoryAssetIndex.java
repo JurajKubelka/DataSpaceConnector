@@ -120,9 +120,6 @@ public class InMemoryAssetIndex implements AssetIndex, DataAddressResolver, Asse
         Objects.requireNonNull(assetId, "assetId");
         lock.readLock().lock();
         try {
-            if (!dataAddresses.containsKey(assetId) || dataAddresses.get(assetId) == null) {
-                throw new IllegalArgumentException("No DataAddress found for Asset ID=" + assetId);
-            }
             return dataAddresses.get(assetId);
         } finally {
             lock.readLock().unlock();
@@ -145,11 +142,6 @@ public class InMemoryAssetIndex implements AssetIndex, DataAddressResolver, Asse
         } finally {
             lock.writeLock().unlock();
         }
-    }
-
-    @Override
-    public void accept(Asset asset, DataAddress dataAddress) {
-        accept(new AssetEntry(asset, dataAddress));
     }
 
     @Override

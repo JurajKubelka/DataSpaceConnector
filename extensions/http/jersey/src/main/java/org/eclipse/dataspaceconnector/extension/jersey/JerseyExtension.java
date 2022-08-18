@@ -14,18 +14,24 @@
 
 package org.eclipse.dataspaceconnector.extension.jersey;
 
+import org.eclipse.dataspaceconnector.extension.jersey.validation.ResourceInterceptorBinder;
+import org.eclipse.dataspaceconnector.extension.jersey.validation.ResourceInterceptorProvider;
 import org.eclipse.dataspaceconnector.extension.jetty.JettyService;
 import org.eclipse.dataspaceconnector.spi.WebService;
+import org.eclipse.dataspaceconnector.spi.system.Inject;
+import org.eclipse.dataspaceconnector.spi.system.Provider;
 import org.eclipse.dataspaceconnector.spi.system.Provides;
-import org.eclipse.dataspaceconnector.spi.system.Requires;
 import org.eclipse.dataspaceconnector.spi.system.ServiceExtension;
 import org.eclipse.dataspaceconnector.spi.system.ServiceExtensionContext;
-import org.eclipse.dataspaceconnector.spi.types.TypeManager;
+import org.eclipse.dataspaceconnector.spi.validation.InterceptorFunctionRegistry;
 
-@Provides({WebService.class})
-@Requires({JettyService.class})
+@Provides(WebService.class)
 public class JerseyExtension implements ServiceExtension {
     private JerseyRestService jerseyRestService;
+
+    @Inject
+    private JettyService jettyService;
+    private ResourceInterceptorProvider provider;
 
     @Override
     public String name() {
@@ -35,13 +41,14 @@ public class JerseyExtension implements ServiceExtension {
     @Override
     public void initialize(ServiceExtensionContext context) {
         var monitor = context.getMonitor();
-        TypeManager typeManager = context.getTypeManager();
+        var typeManager = context.getTypeManager();
 
-        var jettyService = context.getService(JettyService.class);
+        var configuration = JerseyConfiguration.from(context);
 
-        var corsConfiguration = CorsFilterConfiguration.from(context);
+        jerseyRestService = new JerseyRestService(jettyService, typeManager, configuration, monitor);
 
-        jerseyRestService = new JerseyRestService(jettyService, typeManager, corsConfiguration, monitor);
+        provider = new ResourceInterceptorProvider();
+        jerseyRestService.registerInstance(() -> new ResourceInterceptorBinder(provider));
 
         context.registerService(WebService.class, jerseyRestService);
     }
@@ -49,5 +56,10 @@ public class JerseyExtension implements ServiceExtension {
     @Override
     public void start() {
         jerseyRestService.start();
+    }
+
+    @Provider
+    public InterceptorFunctionRegistry createInterceptorFunctionRegistry() {
+        return provider;
     }
 }

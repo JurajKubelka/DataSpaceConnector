@@ -17,15 +17,15 @@ plugins {
 }
 
 val okHttpVersion: String by project
-val jodahFailsafeVersion: String by project
+val failsafeVersion: String by project
 
 dependencies {
-    api(project(":spi:core-spi"))
-    api(project(":spi:transfer-spi"))
+    api(project(":spi:common:core-spi"))
+    api(project(":spi:control-plane:transfer-spi"))
     implementation(project(":common:util"))
 
     implementation("com.squareup.okhttp3:okhttp:${okHttpVersion}")
-    implementation("net.jodah:failsafe:${jodahFailsafeVersion}")
+    implementation("dev.failsafe:failsafe:${failsafeVersion}")
 }
 
 

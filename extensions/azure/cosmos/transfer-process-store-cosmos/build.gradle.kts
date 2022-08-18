@@ -17,18 +17,18 @@ plugins {
 }
 
 val cosmosSdkVersion: String by project
-val jodahFailsafeVersion: String by project
+val failsafeVersion: String by project
 val awaitility: String by project
 
 dependencies {
-    api(project(":spi:transfer-spi"))
+    api(project(":spi:control-plane:transfer-spi"))
     api(project(":common:util"))
     api(project(":extensions:azure:cosmos:cosmos-common"))
 
     implementation("com.azure:azure-cosmos:${cosmosSdkVersion}")
-    implementation("net.jodah:failsafe:${jodahFailsafeVersion}")
+    implementation("dev.failsafe:failsafe:${failsafeVersion}")
 
-    testImplementation(testFixtures(project(":common:util")))
+
     testImplementation(testFixtures(project(":extensions:azure:azure-test")))
     testImplementation(testFixtures(project(":extensions:azure:cosmos:cosmos-common")))
     testImplementation("org.awaitility:awaitility:${awaitility}")

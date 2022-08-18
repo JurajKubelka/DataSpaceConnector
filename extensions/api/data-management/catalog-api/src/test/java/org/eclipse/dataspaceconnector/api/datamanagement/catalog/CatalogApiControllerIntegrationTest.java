@@ -14,9 +14,10 @@
 
 package org.eclipse.dataspaceconnector.api.datamanagement.catalog;
 
-import com.github.javafaker.Faker;
 import io.restassured.specification.RequestSpecification;
-import org.eclipse.dataspaceconnector.junit.launcher.EdcExtension;
+import net.datafaker.Faker;
+import org.eclipse.dataspaceconnector.junit.extensions.EdcExtension;
+import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.spi.contract.offer.ContractOfferService;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcher;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcherRegistry;
@@ -37,7 +38,7 @@ import java.util.UUID;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static java.util.concurrent.CompletableFuture.completedFuture;
-import static org.eclipse.dataspaceconnector.common.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.dataspaceconnector.junit.testfixtures.TestUtils.getFreePort;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
@@ -58,21 +59,26 @@ public class CatalogApiControllerIntegrationTest {
 
         extension.registerSystemExtension(ServiceExtension.class, new TestExtension());
         extension.setConfiguration(Map.of(
+                "web.http.port", String.valueOf(getFreePort()),
+                "web.http.path", "/api",
                 "web.http.data.port", String.valueOf(port),
                 "web.http.data.path", "/api/v1/data",
                 "edc.api.auth.key", authKey
         ));
+
     }
 
     @Test
     void getProviderCatalog() {
         var contractOffer = ContractOffer.Builder.newInstance()
                 .id(UUID.randomUUID().toString())
-                .policyId(UUID.randomUUID().toString())
+                .policy(Policy.Builder.newInstance().build())
                 .assetId(UUID.randomUUID().toString())
                 .build();
         var catalog = Catalog.Builder.newInstance().id("id").contractOffers(List.of(contractOffer)).build();
-        when(dispatcher.send(any(), any(), any())).thenReturn(completedFuture(catalog));
+        var emptyCatalog = Catalog.Builder.newInstance().id("id2").contractOffers(List.of()).build();
+        when(dispatcher.send(any(), any(), any())).thenReturn(completedFuture(catalog))
+                .thenReturn(completedFuture(emptyCatalog));
 
         baseRequest()
                 .queryParam("providerUrl", FAKER.internet().url())

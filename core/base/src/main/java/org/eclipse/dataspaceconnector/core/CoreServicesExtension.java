@@ -14,15 +14,14 @@
 
 package org.eclipse.dataspaceconnector.core;
 
-import net.jodah.failsafe.RetryPolicy;
-import okhttp3.EventListener;
-import okhttp3.OkHttpClient;
 import org.eclipse.dataspaceconnector.core.base.CommandHandlerRegistryImpl;
 import org.eclipse.dataspaceconnector.core.base.RemoteMessageDispatcherRegistryImpl;
 import org.eclipse.dataspaceconnector.core.base.agent.ParticipantAgentServiceImpl;
 import org.eclipse.dataspaceconnector.core.base.policy.PolicyEngineImpl;
 import org.eclipse.dataspaceconnector.core.base.policy.RuleBindingRegistryImpl;
 import org.eclipse.dataspaceconnector.core.base.policy.ScopeFilter;
+import org.eclipse.dataspaceconnector.core.event.EventExecutorServiceContainer;
+import org.eclipse.dataspaceconnector.core.event.EventRouterImpl;
 import org.eclipse.dataspaceconnector.core.health.HealthCheckServiceConfiguration;
 import org.eclipse.dataspaceconnector.core.health.HealthCheckServiceImpl;
 import org.eclipse.dataspaceconnector.core.security.DefaultPrivateKeyParseFunction;
@@ -30,6 +29,7 @@ import org.eclipse.dataspaceconnector.policy.model.PolicyRegistrationTypes;
 import org.eclipse.dataspaceconnector.spi.EdcSetting;
 import org.eclipse.dataspaceconnector.spi.agent.ParticipantAgentService;
 import org.eclipse.dataspaceconnector.spi.command.CommandHandlerRegistry;
+import org.eclipse.dataspaceconnector.spi.event.EventRouter;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcherRegistry;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.policy.PolicyEngine;
@@ -53,28 +53,21 @@ import org.eclipse.dataspaceconnector.spi.telemetry.Telemetry;
 import org.eclipse.dataspaceconnector.spi.types.TypeManager;
 
 import java.security.PrivateKey;
+import java.time.Clock;
 import java.time.Duration;
-import java.time.temporal.ChronoUnit;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.TimeUnit;
-
-import static java.util.Optional.ofNullable;
+import java.util.concurrent.Executors;
 
 @BaseExtension
 @Provides({
         HealthCheckService.class,
         Monitor.class,
         TypeManager.class,
+        Clock.class,
         Telemetry.class
 })
 public class CoreServicesExtension implements ServiceExtension {
 
-    @EdcSetting
-    public static final String MAX_RETRIES = "edc.core.retry.retries.max";
-    @EdcSetting
-    public static final String BACKOFF_MIN_MILLIS = "edc.core.retry.backoff.min";
-    @EdcSetting
-    public static final String BACKOFF_MAX_MILLIS = "edc.core.retry.backoff.max";
     @EdcSetting
     public static final String LIVENESS_PERIOD_SECONDS_SETTING = "edc.core.system.health.check.liveness-period";
     @EdcSetting
@@ -90,12 +83,7 @@ public class CoreServicesExtension implements ServiceExtension {
     private static final int DEFAULT_TP_SIZE = 3;
     private static final String DEFAULT_HOSTNAME = "localhost";
 
-    /**
-     * An optional OkHttp {@link EventListener} that can be used to instrument OkHttp client for collecting metrics.
-     * Used by the optional {@code micrometer} module.
-     */
-    @Inject(required = false)
-    private EventListener okHttpEventListener;
+
     /**
      * An optional instrumentor for {@link ExecutorService}. Used by the optional {@code micrometer} module.
      */
@@ -104,6 +92,9 @@ public class CoreServicesExtension implements ServiceExtension {
 
     @Inject
     private PrivateKeyResolver privateKeyResolver;
+
+    @Inject(required = false)
+    private EventExecutorServiceContainer eventExecutorServiceContainer;
 
     private HealthCheckServiceImpl healthCheckService;
     private RuleBindingRegistryImpl ruleBindingRegistry;
@@ -149,17 +140,6 @@ public class CoreServicesExtension implements ServiceExtension {
     }
 
     @Provider
-    public RetryPolicy<?> retryPolicy(ServiceExtensionContext context) {
-        var maxRetries = context.getSetting(MAX_RETRIES, 5);
-        var minBackoff = context.getSetting(BACKOFF_MIN_MILLIS, 500);
-        var maxBackoff = context.getSetting(BACKOFF_MAX_MILLIS, 10_000);
-
-        return new RetryPolicy<>()
-                .withMaxRetries(maxRetries)
-                .withBackoff(minBackoff, maxBackoff, ChronoUnit.MILLIS);
-    }
-
-    @Provider
     public Hostname hostname(ServiceExtensionContext context) {
         var hostname = context.getSetting(HOSTNAME_SETTING, DEFAULT_HOSTNAME);
         if (DEFAULT_HOSTNAME.equals(hostname)) {
@@ -194,14 +174,16 @@ public class CoreServicesExtension implements ServiceExtension {
     }
 
     @Provider
-    public OkHttpClient addHttpClient(ServiceExtensionContext context) {
-        var builder = new OkHttpClient.Builder()
-                .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS);
+    public EventRouter eventRouter(ServiceExtensionContext context) {
+        if (eventExecutorServiceContainer == null) {
+            eventExecutorServiceContainer = eventExecutorServiceContainer();
+        }
+        return new EventRouterImpl(context.getMonitor(), eventExecutorServiceContainer.getExecutorService());
+    }
 
-        ofNullable(okHttpEventListener).ifPresent(builder::eventListener);
-
-        return builder.build();
+    @Provider(isDefault = true)
+    public EventExecutorServiceContainer eventExecutorServiceContainer() {
+        return new EventExecutorServiceContainer(Executors.newFixedThreadPool(1)); // TODO: make configurable
     }
 
     @Provider(isDefault = true)

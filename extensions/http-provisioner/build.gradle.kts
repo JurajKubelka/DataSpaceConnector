@@ -17,31 +17,33 @@ plugins {
     id("io.swagger.core.v3.swagger-gradle-plugin")
 }
 
-val okHttpVersion: String by project
-val jodahFailsafeVersion: String by project
-val rsApi: String by project
-val restAssured: String by project
+val awaitility: String by project
+val failsafeVersion: String by project
 val jerseyVersion: String by project
+val okHttpVersion: String by project
+val restAssured: String by project
+val rsApi: String by project
 
 
 dependencies {
-    api(project(":spi:transfer-spi"))
-    api(project(":spi:web-spi"))
-    implementation(project(":extensions:api:auth-spi"))
+    api(project(":spi:control-plane:transfer-spi"))
+    api(project(":spi:common:web-spi"))
+    implementation(project(":spi:common:auth-spi"))
+    implementation(project(":extensions:api:api-core"))
     implementation(project(":core:transfer")) // needs the AddProvisionedResourceCommand
 
     implementation("com.squareup.okhttp3:okhttp:${okHttpVersion}")
-    implementation("net.jodah:failsafe:${jodahFailsafeVersion}")
+    implementation("dev.failsafe:failsafe:${failsafeVersion}")
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
 
     testImplementation(project(":core:contract"))
-    testImplementation(project(":extensions:dataloading"))
     testImplementation(project(":core:defaults"))
-
-    testImplementation(testFixtures(project(":common:util")))
-    testImplementation(testFixtures(project(":launchers:junit")))
+    testImplementation(project(":extensions:dataloading"))
+    testImplementation(project(":extensions:http"))
+    testImplementation(project(":extensions:junit"))
     testImplementation("io.rest-assured:rest-assured:${restAssured}")
-    testRuntimeOnly("org.glassfish.jersey.ext:jersey-bean-validation:${jerseyVersion}") //for validation
+
+    testImplementation("org.awaitility:awaitility:${awaitility}")
 }
 
 

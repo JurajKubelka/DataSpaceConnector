@@ -25,19 +25,16 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import org.apache.commons.lang3.StringUtils;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.ContractAgreementDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.ContractNegotiationDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.NegotiationId;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.NegotiationInitiateRequestDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.model.NegotiationState;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.service.ContractNegotiationService;
-import org.eclipse.dataspaceconnector.api.exception.ObjectExistsException;
-import org.eclipse.dataspaceconnector.api.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.api.query.QuerySpecDto;
-import org.eclipse.dataspaceconnector.api.result.ServiceResult;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
-import org.eclipse.dataspaceconnector.spi.EdcException;
+import org.eclipse.dataspaceconnector.spi.exception.InvalidRequestException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.result.Result;
@@ -50,6 +47,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
+import static org.eclipse.dataspaceconnector.api.ServiceResultHandler.mapToException;
 
 @Consumes({ MediaType.APPLICATION_JSON })
 @Produces({ MediaType.APPLICATION_JSON })
@@ -71,15 +69,18 @@ public class ContractNegotiationApiController implements ContractNegotiationApi 
     public List<ContractNegotiationDto> getNegotiations(@Valid @BeanParam QuerySpecDto querySpecDto) {
         var result = transformerRegistry.transform(querySpecDto, QuerySpec.class);
         if (result.failed()) {
-            monitor.warning("Error transforming QuerySpec: " + String.join(", ", result.getFailureMessages()));
-            throw new IllegalArgumentException("Cannot transform QuerySpecDto object");
+            throw new InvalidRequestException(result.getFailureMessages());
         }
 
         var spec = result.getContent();
 
         monitor.debug(format("Get all contract definitions %s", spec));
 
-        return service.query(spec).stream()
+        var queryResult = service.query(spec);
+        if (queryResult.failed()) {
+            throw mapToException(queryResult, ContractNegotiation.class, null);
+        }
+        return queryResult.getContent().stream()
                 .map(it -> transformerRegistry.transform(it, ContractNegotiationDto.class))
                 .filter(Result::succeeded)
                 .map(Result::getContent)
@@ -128,18 +129,14 @@ public class ContractNegotiationApiController implements ContractNegotiationApi 
     @POST
     @Override
     public NegotiationId initiateContractNegotiation(@Valid NegotiationInitiateRequestDto initiateDto) {
-        if (!isValid(initiateDto)) {
-            throw new IllegalArgumentException("Negotiation request is invalid");
-        }
-
         var transformResult = transformerRegistry.transform(initiateDto, ContractOfferRequest.class);
         if (transformResult.failed()) {
-            throw new IllegalArgumentException("Negotiation request is invalid");
+            throw new InvalidRequestException(transformResult.getFailureMessages());
         }
 
         var request = transformResult.getContent();
 
-        ContractNegotiation contractNegotiation = service.initiateNegotiation(request);
+        var contractNegotiation = service.initiateNegotiation(request);
         return new NegotiationId(contractNegotiation.getId());
     }
 
@@ -152,7 +149,7 @@ public class ContractNegotiationApiController implements ContractNegotiationApi 
         if (result.succeeded()) {
             monitor.debug(format("Contract negotiation canceled %s", result.getContent().getId()));
         } else {
-            handleFailedResult(result, id);
+            throw mapToException(result, ContractNegotiation.class, id);
         }
     }
 
@@ -165,23 +162,8 @@ public class ContractNegotiationApiController implements ContractNegotiationApi 
         if (result.succeeded()) {
             monitor.debug(format("Contract negotiation declined %s", result.getContent().getId()));
         } else {
-            handleFailedResult(result, id);
+            throw mapToException(result, ContractNegotiation.class, id);
         }
     }
 
-    private boolean isValid(NegotiationInitiateRequestDto initiateDto) {
-        return StringUtils.isNoneBlank(initiateDto.getConnectorId(), initiateDto.getConnectorAddress(), initiateDto.getProtocol(),
-                initiateDto.getOffer().getOfferId(), initiateDto.getOffer().getAssetId());
-    }
-
-    private void handleFailedResult(ServiceResult<ContractNegotiation> result, String id) {
-        switch (result.reason()) {
-            case NOT_FOUND:
-                throw new ObjectNotFoundException(ContractNegotiation.class, id);
-            case CONFLICT:
-                throw new ObjectExistsException(ContractNegotiation.class, id);
-            default:
-                throw new EdcException("unexpected error");
-        }
-    }
 }

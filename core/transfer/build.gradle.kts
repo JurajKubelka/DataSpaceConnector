@@ -12,6 +12,7 @@
  *
  */
 
+val awaitility: String by project
 val openTelemetryVersion: String by project
 
 plugins {
@@ -19,15 +20,16 @@ plugins {
 }
 
 dependencies {
-    api(project(":spi:transfer-spi"))
-
-    implementation(project(":spi:policy-spi"))
+    api(project(":spi:control-plane:policy-spi"))
+    api(project(":spi:control-plane:transfer-spi"))
     implementation(project(":common:state-machine-lib"))
     implementation(project(":common:util"))
     implementation("io.opentelemetry:opentelemetry-extension-annotations:${openTelemetryVersion}")
 
-    testImplementation(testFixtures(project(":common:util")))
+    testImplementation(project(":extensions:junit"))
     testImplementation(project(":core:defaults")) //used in the component test
+    testImplementation(testFixtures(project(":common:util")))
+    testImplementation("org.awaitility:awaitility:${awaitility}")
 }
 
 

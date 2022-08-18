@@ -24,14 +24,14 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import org.eclipse.dataspaceconnector.api.datamanagement.contractdefinition.model.ContractDefinitionDto;
+import org.eclipse.dataspaceconnector.api.datamanagement.contractdefinition.model.ContractDefinitionRequestDto;
+import org.eclipse.dataspaceconnector.api.datamanagement.contractdefinition.model.ContractDefinitionResponseDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.contractdefinition.service.ContractDefinitionService;
-import org.eclipse.dataspaceconnector.api.exception.ObjectExistsException;
-import org.eclipse.dataspaceconnector.api.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.api.query.QuerySpecDto;
-import org.eclipse.dataspaceconnector.api.result.ServiceResult;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
-import org.eclipse.dataspaceconnector.spi.EdcException;
+import org.eclipse.dataspaceconnector.spi.exception.InvalidRequestException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectExistsException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.result.Result;
@@ -42,6 +42,7 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static java.lang.String.format;
+import static org.eclipse.dataspaceconnector.api.ServiceResultHandler.mapToException;
 
 @Produces({ MediaType.APPLICATION_JSON })
 @Path("/contractdefinitions")
@@ -58,19 +59,24 @@ public class ContractDefinitionApiController implements ContractDefinitionApi {
 
     @GET
     @Override
-    public List<ContractDefinitionDto> getAllContractDefinitions(@Valid @BeanParam QuerySpecDto querySpecDto) {
+    public List<ContractDefinitionResponseDto> getAllContractDefinitions(@Valid @BeanParam QuerySpecDto querySpecDto) {
         var result = transformerRegistry.transform(querySpecDto, QuerySpec.class);
         if (result.failed()) {
-            monitor.warning("Error transforming QuerySpec: " + String.join(", ", result.getFailureMessages()));
-            throw new IllegalArgumentException("Cannot transform QuerySpecDto object");
+            throw new InvalidRequestException(result.getFailureMessages());
         }
 
         var spec = result.getContent();
 
         monitor.debug(format("get all contract definitions %s", spec));
 
-        return service.query(spec).stream()
-                .map(it -> transformerRegistry.transform(it, ContractDefinitionDto.class))
+        var queryResult = service.query(spec);
+        if (queryResult.failed()) {
+            throw mapToException(queryResult, ContractDefinition.class, null);
+        }
+
+        return queryResult.getContent()
+                .stream()
+                .map(it -> transformerRegistry.transform(it, ContractDefinitionResponseDto.class))
                 .filter(Result::succeeded)
                 .map(Result::getContent)
                 .collect(Collectors.toList());
@@ -79,12 +85,12 @@ public class ContractDefinitionApiController implements ContractDefinitionApi {
     @GET
     @Path("{id}")
     @Override
-    public ContractDefinitionDto getContractDefinition(@PathParam("id") String id) {
+    public ContractDefinitionResponseDto getContractDefinition(@PathParam("id") String id) {
         monitor.debug(format("get contract definition with ID %s", id));
 
         return Optional.of(id)
                 .map(service::findById)
-                .map(it -> transformerRegistry.transform(it, ContractDefinitionDto.class))
+                .map(it -> transformerRegistry.transform(it, ContractDefinitionResponseDto.class))
                 .filter(Result::succeeded)
                 .map(Result::getContent)
                 .orElseThrow(() -> new ObjectNotFoundException(ContractDefinition.class, id));
@@ -92,18 +98,18 @@ public class ContractDefinitionApiController implements ContractDefinitionApi {
 
     @POST
     @Override
-    public void createContractDefinition(@Valid ContractDefinitionDto dto) {
-        monitor.debug("create new contract definition");
+    public void createContractDefinition(@Valid ContractDefinitionRequestDto dto) {
+        monitor.debug("Create new contract definition");
         var transformResult = transformerRegistry.transform(dto, ContractDefinition.class);
         if (transformResult.failed()) {
-            throw new IllegalArgumentException("Request is not well formatted");
+            throw new InvalidRequestException(transformResult.getFailureMessages());
         }
 
-        ContractDefinition contractDefinition = transformResult.getContent();
+        var contractDefinition = transformResult.getContent();
 
         var result = service.create(contractDefinition);
         if (result.succeeded()) {
-            monitor.debug(format("Contract negotiation created %s", result.getContent().getId()));
+            monitor.debug(format("Contract definition created %s", result.getContent().getId()));
         } else {
             throw new ObjectExistsException(ContractDefinition.class, dto.getId());
         }
@@ -116,20 +122,9 @@ public class ContractDefinitionApiController implements ContractDefinitionApi {
         monitor.debug(format("Attempting to delete contract definition with id %s", id));
         var result = service.delete(id);
         if (result.succeeded()) {
-            monitor.debug(format("Contract negotiation deleted %s", result.getContent().getId()));
+            monitor.debug(format("Contract definition deleted %s", result.getContent().getId()));
         } else {
-            handleFailedResult(result, id);
-        }
-    }
-
-    private void handleFailedResult(ServiceResult<ContractDefinition> result, String id) {
-        switch (result.reason()) {
-            case NOT_FOUND:
-                throw new ObjectNotFoundException(ContractDefinition.class, id);
-            case CONFLICT:
-                throw new ObjectExistsException(ContractDefinition.class, id);
-            default:
-                throw new EdcException("unexpected error");
+            throw mapToException(result, ContractDefinition.class, id);
         }
     }
 

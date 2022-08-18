@@ -21,6 +21,7 @@ import org.eclipse.dataspaceconnector.policy.model.Permission;
 import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.policy.model.PolicyType;
 import org.eclipse.dataspaceconnector.spi.asset.AssetSelectorExpression;
+import org.eclipse.dataspaceconnector.spi.policy.PolicyDefinition;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.Map;
@@ -28,35 +29,21 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static java.lang.String.format;
-import static org.eclipse.dataspaceconnector.system.tests.local.TransferLocalSimulation.CONSUMER_CONNECTOR_MANAGEMENT_URL;
-import static org.eclipse.dataspaceconnector.system.tests.local.TransferLocalSimulation.CONSUMER_MANAGEMENT_PATH;
 import static org.eclipse.dataspaceconnector.system.tests.local.TransferLocalSimulation.PROVIDER_CONNECTOR_MANAGEMENT_URL;
 import static org.eclipse.dataspaceconnector.system.tests.local.TransferLocalSimulation.PROVIDER_MANAGEMENT_PATH;
 import static org.eclipse.dataspaceconnector.system.tests.utils.TransferSimulationUtils.PROVIDER_ASSET_FILE;
 import static org.eclipse.dataspaceconnector.system.tests.utils.TransferSimulationUtils.PROVIDER_ASSET_ID;
-import static org.eclipse.dataspaceconnector.system.tests.utils.TransferSimulationUtils.TRANSFER_PROCESSES_PATH;
 
 public class BlobTransferUtils {
 
     private static final String ASSETS_PATH = "/assets";
-    private static final String POLICIES_PATH = "/policies";
+    private static final String POLICIES_PATH = "/policydefinitions";
     private static final String CONTRACT_DEFINITIONS_PATH = "/contractdefinitions";
-
-    @NotNull
-    public static String getProvisionedContainerName() {
-        return given()
-                .baseUri(CONSUMER_CONNECTOR_MANAGEMENT_URL + CONSUMER_MANAGEMENT_PATH)
-                .when()
-                .get(TRANSFER_PROCESSES_PATH)
-                .then()
-                .statusCode(200)
-                .extract().body()
-                .jsonPath().getString("[0].dataDestination.properties.container");
-    }
 
     public static void createAsset(String accountName, String containerName) {
         var asset = Map.of(
                 "asset", Map.of(
+                        "id", PROVIDER_ASSET_ID,
                         "properties", Map.of(
                                 "asset:prop:name", PROVIDER_ASSET_ID,
                                 "asset:prop:contenttype", "text/plain",
@@ -81,12 +68,14 @@ public class BlobTransferUtils {
 
     @NotNull
     public static String createPolicy() {
-        var policy = Policy.Builder.newInstance()
-                .permission(Permission.Builder.newInstance()
-                        .target(PROVIDER_ASSET_ID)
-                        .action(Action.Builder.newInstance().type("USE").build())
+        var policy = PolicyDefinition.Builder.newInstance()
+                .policy(Policy.Builder.newInstance()
+                        .permission(Permission.Builder.newInstance()
+                                .target(PROVIDER_ASSET_ID)
+                                .action(Action.Builder.newInstance().type("USE").build())
+                                .build())
+                        .type(PolicyType.SET)
                         .build())
-                .type(PolicyType.SET)
                 .build();
 
         seedProviderData(POLICIES_PATH, policy);

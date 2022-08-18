@@ -14,13 +14,13 @@
 
 package org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.transform;
 
-import com.github.javafaker.Faker;
+import net.datafaker.Faker;
 import org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.model.DataAddressInformationDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.model.DataRequestDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.model.TransferProcessDto;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
-import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistryImpl;
 import org.eclipse.dataspaceconnector.spi.transformer.TransformerContext;
+import org.eclipse.dataspaceconnector.spi.transformer.TransformerContextImpl;
 import org.eclipse.dataspaceconnector.spi.types.domain.DataAddress;
 import org.eclipse.dataspaceconnector.spi.types.domain.transfer.DataRequest;
 import org.eclipse.dataspaceconnector.spi.types.domain.transfer.TransferProcess;
@@ -35,10 +35,12 @@ public class TransferProcessTransformerTestData {
     static Faker faker = new Faker();
 
     DtoTransformerRegistry registry = mock(DtoTransformerRegistry.class);
-    TransformerContext context = new DtoTransformerRegistryImpl.DtoTransformerContext(registry);
+    TransformerContext context = new TransformerContextImpl(registry);
     String id = faker.lorem().word();
     TransferProcess.Type type = faker.options().option(TransferProcess.Type.class);
     TransferProcessStates state = faker.options().option(TransferProcessStates.class);
+    long stateTimestamp = faker.random().nextLong();
+    long createdTimestamp = faker.random().nextLong();
     String errorDetail = faker.lorem().word();
 
     Map<String, String> dataDestinationProperties = Map.of(faker.lorem().word(), faker.lorem().word());
@@ -47,21 +49,24 @@ public class TransferProcessTransformerTestData {
     DataRequest dataRequest = DataRequest.Builder.newInstance()
             .dataDestination(dataDestination.build())
             .build();
-    DataRequestDto dataRequestDto = DataRequestDto.Builder.newInstance().build();
-
     public TransferProcess.Builder entity = TransferProcess.Builder.newInstance()
             .id(id)
             .type(type)
             .state(state.code())
+            .stateTimestamp(stateTimestamp)
+            .createdAt(createdTimestamp)
             .errorDetail(errorDetail)
             .dataRequest(dataRequest);
-
+    DataRequestDto dataRequestDto = DataRequestDto.Builder.newInstance().build();
     TransferProcessDto.Builder dto = TransferProcessDto.Builder.newInstance()
             .id(id)
             .type(type.name())
             .state(state.name())
+            .stateTimestamp(stateTimestamp)
             .errorDetail(errorDetail)
             .dataRequest(dataRequestDto)
+            .createdAt(createdTimestamp)
+            .updatedAt(createdTimestamp)
             .dataDestination(
                     DataAddressInformationDto.Builder.newInstance()
                             .properties(mapWith(dataDestinationProperties, "type", dataDestinationType))

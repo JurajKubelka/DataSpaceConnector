@@ -15,14 +15,15 @@
 package org.eclipse.dataspaceconnector.azure.dataplane.azurestorage;
 
 import com.azure.core.util.BinaryData;
-import com.github.javafaker.Faker;
-import net.jodah.failsafe.RetryPolicy;
+import dev.failsafe.RetryPolicy;
+import net.datafaker.Faker;
 import org.eclipse.dataspaceconnector.azure.blob.core.AzureSasToken;
 import org.eclipse.dataspaceconnector.azure.blob.core.api.BlobStoreApi;
 import org.eclipse.dataspaceconnector.azure.blob.core.api.BlobStoreApiImpl;
 import org.eclipse.dataspaceconnector.azure.dataplane.azurestorage.pipeline.AzureStorageDataSinkFactory;
 import org.eclipse.dataspaceconnector.azure.dataplane.azurestorage.pipeline.AzureStorageDataSourceFactory;
 import org.eclipse.dataspaceconnector.azure.testfixtures.AbstractAzureBlobTest;
+import org.eclipse.dataspaceconnector.azure.testfixtures.TestFunctions;
 import org.eclipse.dataspaceconnector.azure.testfixtures.annotations.AzureStorageIntegrationTest;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.security.Vault;
@@ -56,7 +57,7 @@ class AzureDataPlaneCopyIntegrationTest extends AbstractAzureBlobTest {
 
     String account1KeyName = faker.lorem().word() + "1";
     String account2KeyName = faker.lorem().word() + "2";
-    RetryPolicy<Object> policy = new RetryPolicy<>().withMaxRetries(1);
+    RetryPolicy<Object> policy = RetryPolicy.builder().withMaxRetries(1).build();
     String sinkContainerName = createContainerName();
     String blobName = createBlobName();
     String content = faker.lorem().sentence();
@@ -64,8 +65,8 @@ class AzureDataPlaneCopyIntegrationTest extends AbstractAzureBlobTest {
     Monitor monitor = mock(Monitor.class);
     Vault vault = mock(Vault.class);
 
-    BlobStoreApi account1Api = new BlobStoreApiImpl(vault, getEndpoint(account1Name));
-    BlobStoreApi account2Api = new BlobStoreApiImpl(vault, getEndpoint(account2Name));
+    BlobStoreApi account1Api = new BlobStoreApiImpl(vault, TestFunctions.getBlobServiceTestEndpoint(account1Name));
+    BlobStoreApi account2Api = new BlobStoreApiImpl(vault, TestFunctions.getBlobServiceTestEndpoint(account2Name));
 
     @BeforeEach
     void setUp() {

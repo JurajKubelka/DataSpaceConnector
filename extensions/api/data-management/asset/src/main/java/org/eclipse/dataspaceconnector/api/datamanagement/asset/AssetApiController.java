@@ -26,15 +26,13 @@ import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
 import jakarta.ws.rs.core.MediaType;
-import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.AssetDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.AssetEntryDto;
+import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.AssetResponseDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.asset.service.AssetService;
-import org.eclipse.dataspaceconnector.api.exception.ObjectExistsException;
-import org.eclipse.dataspaceconnector.api.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.api.query.QuerySpecDto;
-import org.eclipse.dataspaceconnector.api.result.ServiceResult;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
-import org.eclipse.dataspaceconnector.spi.EdcException;
+import org.eclipse.dataspaceconnector.spi.exception.InvalidRequestException;
+import org.eclipse.dataspaceconnector.spi.exception.ObjectNotFoundException;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.result.Result;
@@ -43,9 +41,11 @@ import org.eclipse.dataspaceconnector.spi.types.domain.asset.Asset;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.lang.String.format;
+import static java.util.stream.Collectors.toList;
+import static org.eclipse.dataspaceconnector.api.ServiceResultHandler.mapToException;
 
 @Consumes({ MediaType.APPLICATION_JSON })
 @Produces({ MediaType.APPLICATION_JSON })
@@ -69,7 +69,8 @@ public class AssetApiController implements AssetApi {
         var dataAddressResult = transformerRegistry.transform(assetEntryDto.getDataAddress(), DataAddress.class);
 
         if (assetResult.failed() || dataAddressResult.failed()) {
-            throw new IllegalArgumentException("Request is not well formatted");
+            var errorMessages = Stream.concat(assetResult.getFailureMessages().stream(), dataAddressResult.getFailureMessages().stream());
+            throw new InvalidRequestException(errorMessages.collect(toList()));
         }
 
         var dataAddress = dataAddressResult.getContent();
@@ -80,38 +81,45 @@ public class AssetApiController implements AssetApi {
         if (result.succeeded()) {
             monitor.debug(format("Asset created %s", assetEntryDto.getAsset()));
         } else {
-            handleFailedResult(result, asset.getId());
+            throw mapToException(result, Asset.class, asset.getId());
         }
     }
 
     @GET
     @Override
-    public List<AssetDto> getAllAssets(@Valid @BeanParam QuerySpecDto querySpecDto) {
-        var result = transformerRegistry.transform(querySpecDto, QuerySpec.class);
-        if (result.failed()) {
-            monitor.warning("Error transforming QuerySpec: " + String.join(", ", result.getFailureMessages()));
-            throw new IllegalArgumentException("Cannot transform QuerySpecDto object");
+    public List<AssetResponseDto> getAllAssets(@Valid @BeanParam QuerySpecDto querySpecDto) {
+        var transformationResult = transformerRegistry.transform(querySpecDto, QuerySpec.class);
+        if (transformationResult.failed()) {
+            throw new InvalidRequestException(transformationResult.getFailureMessages());
         }
 
-        var spec = result.getContent();
+        var spec = transformationResult.getContent();
 
         monitor.debug(format("get all Assets from %s", spec));
 
-        return service.query(spec).stream()
-                .map(it -> transformerRegistry.transform(it, AssetDto.class))
+        var queryResult = service.query(spec);
+
+        if (queryResult.failed()) {
+            throw mapToException(queryResult, QuerySpec.class, null);
+        }
+
+        var assets = queryResult.getContent();
+
+        return assets.stream()
+                .map(it -> transformerRegistry.transform(it, AssetResponseDto.class))
                 .filter(Result::succeeded)
                 .map(Result::getContent)
-                .collect(Collectors.toList());
+                .collect(toList());
     }
 
     @GET
     @Path("{id}")
     @Override
-    public AssetDto getAsset(@PathParam("id") String id) {
+    public AssetResponseDto getAsset(@PathParam("id") String id) {
         monitor.debug(format("Attempting to return Asset with id %s", id));
         return Optional.of(id)
                 .map(it -> service.findById(id))
-                .map(it -> transformerRegistry.transform(it, AssetDto.class))
+                .map(it -> transformerRegistry.transform(it, AssetResponseDto.class))
                 .filter(Result::succeeded)
                 .map(Result::getContent)
                 .orElseThrow(() -> new ObjectNotFoundException(Asset.class, id));
@@ -126,19 +134,7 @@ public class AssetApiController implements AssetApi {
         if (result.succeeded()) {
             monitor.debug(format("Asset deleted %s", id));
         } else {
-            handleFailedResult(result, id);
+            throw mapToException(result, Asset.class, id);
         }
     }
-
-    private void handleFailedResult(ServiceResult<Asset> result, String id) {
-        switch (result.reason()) {
-            case NOT_FOUND:
-                throw new ObjectNotFoundException(Asset.class, id);
-            case CONFLICT:
-                throw new ObjectExistsException(Asset.class, id);
-            default:
-                throw new EdcException("unexpected error");
-        }
-    }
-
 }

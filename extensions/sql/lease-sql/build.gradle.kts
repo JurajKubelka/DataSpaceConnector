@@ -24,12 +24,12 @@ val h2Version: String by project
 val assertj: String by project
 
 dependencies {
-    api(project(":extensions:transaction:transaction-datasource-spi"))
-    api(project(":extensions:transaction:transaction-spi"))
-    api(project(":extensions:sql:common-sql"))
+    api(project(":spi:common:core-spi"))
+    api(project(":spi:common:transaction-spi"))
+    implementation(project(":spi:common:transaction-datasource-spi"))
+    implementation(project(":extensions:sql:common-sql"))
 
-
-    testImplementation(testFixtures(project(":launchers:junit")))
+    testImplementation(project(":extensions:junit"))
     testImplementation(project(":core:base"))
     testImplementation(project(":extensions:transaction:transaction-local"))
     testImplementation(testFixtures(project(":extensions:sql:lease-sql")))

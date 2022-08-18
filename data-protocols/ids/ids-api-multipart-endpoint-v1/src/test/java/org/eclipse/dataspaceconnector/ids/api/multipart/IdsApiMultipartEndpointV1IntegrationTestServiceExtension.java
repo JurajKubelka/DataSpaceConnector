@@ -1,5 +1,5 @@
 /*
- *  Copyright (c) 2021 Daimler TSS GmbH
+ *  Copyright (c) 2021 - 2022 Daimler TSS GmbH
  *
  *  This program and the accompanying materials are made available under the
  *  terms of the Apache License, Version 2.0 which is available at
@@ -11,14 +11,15 @@
  *       Daimler TSS GmbH - Initial API and Implementation
  *       Fraunhofer Institute for Software and Systems Engineering - extend tests
  *       Daimler TSS GmbH - fixed contract dates to epoch seconds
+ *       Microsoft Corporation - Use IDS Webhook address for JWT audience claim
+ *       Fraunhofer Institute for Software and Systems Engineering - remove ObjectMapperFactory
  *
  */
 
 package org.eclipse.dataspaceconnector.ids.api.multipart;
 
 import kotlin.NotImplementedError;
-import org.eclipse.dataspaceconnector.common.annotations.ComponentTest;
-import org.eclipse.dataspaceconnector.ids.core.serialization.ObjectMapperFactory;
+import org.eclipse.dataspaceconnector.common.util.junit.annotations.ComponentTest;
 import org.eclipse.dataspaceconnector.policy.model.Action;
 import org.eclipse.dataspaceconnector.policy.model.Permission;
 import org.eclipse.dataspaceconnector.policy.model.Policy;
@@ -35,8 +36,10 @@ import org.eclipse.dataspaceconnector.spi.contract.offer.store.ContractDefinitio
 import org.eclipse.dataspaceconnector.spi.contract.validation.ContractValidationService;
 import org.eclipse.dataspaceconnector.spi.iam.ClaimToken;
 import org.eclipse.dataspaceconnector.spi.iam.IdentityService;
+import org.eclipse.dataspaceconnector.spi.iam.TokenParameters;
 import org.eclipse.dataspaceconnector.spi.iam.TokenRepresentation;
 import org.eclipse.dataspaceconnector.spi.message.MessageContext;
+import org.eclipse.dataspaceconnector.spi.message.Range;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcher;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcherRegistry;
 import org.eclipse.dataspaceconnector.spi.policy.store.PolicyArchive;
@@ -85,8 +88,7 @@ import static org.mockito.Mockito.mock;
         ProviderContractNegotiationManager.class,
         ContractOfferService.class,
         ContractValidationService.class,
-        PolicyArchive.class,
-        ObjectMapperFactory.class
+        PolicyArchive.class
 })
 class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements ServiceExtension {
     private final List<Asset> assets;
@@ -107,7 +109,7 @@ class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements Servic
                         .providerAgentId("provider")
                         .consumerAgentId("consumer")
                         .assetId(UUID.randomUUID().toString())
-                        .policyId("policyId")
+                        .policy(Policy.Builder.newInstance().build())
                         .contractStartDate(Instant.now().getEpochSecond())
                         .contractEndDate(Instant.now().plus(1, ChronoUnit.DAYS).getEpochSecond())
                         .contractSigningDate(Instant.now().getEpochSecond())
@@ -131,17 +133,16 @@ class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements Servic
         context.registerService(ProviderContractNegotiationManager.class, new FakeProviderContractNegotiationManager());
         context.registerService(ConsumerContractNegotiationManager.class, new FakeConsumerContractNegotiationManager());
         context.registerService(PolicyArchive.class, mock(PolicyArchive.class));
-        context.registerService(ObjectMapperFactory.class, new ObjectMapperFactory());
     }
 
     private static class FakeIdentityService implements IdentityService {
         @Override
-        public Result<TokenRepresentation> obtainClientCredentials(String scope) {
+        public Result<TokenRepresentation> obtainClientCredentials(TokenParameters parameters) {
             return Result.success(TokenRepresentation.Builder.newInstance().build());
         }
 
         @Override
-        public Result<ClaimToken> verifyJwtToken(TokenRepresentation tokenRepresentation) {
+        public Result<ClaimToken> verifyJwtToken(TokenRepresentation tokenRepresentation, String audience) {
             return Result.success(ClaimToken.Builder.newInstance().build());
         }
     }
@@ -187,7 +188,7 @@ class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements Servic
 
         @Override
         @NotNull
-        public Stream<ContractOffer> queryContractOffers(ContractOfferQuery query) {
+        public Stream<ContractOffer> queryContractOffers(ContractOfferQuery query, Range range) {
             return assets.stream().map(asset ->
                     ContractOffer.Builder.newInstance()
                             .id("1")
@@ -226,11 +227,6 @@ class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements Servic
         }
 
         @Override
-        public @NotNull List<TransferProcess> nextForState(int state, int max) {
-            return emptyList();
-        }
-
-        @Override
         public void create(TransferProcess process) {
         }
 
@@ -245,6 +241,11 @@ class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements Servic
         @Override
         public Stream<TransferProcess> findAll(QuerySpec querySpec) {
             return null;
+        }
+
+        @Override
+        public @NotNull List<TransferProcess> nextForState(int state, int max) {
+            return emptyList();
         }
 
     }
@@ -266,20 +267,15 @@ class IdsApiMultipartEndpointV1IntegrationTestServiceExtension implements Servic
         private final List<ContractDefinition> contractDefinitions = new ArrayList<>();
 
         @Override
-        public @NotNull Collection<ContractDefinition> findAll() {
-            return contractDefinitions;
-        }
-
-        @Override
         public @NotNull Stream<ContractDefinition> findAll(QuerySpec spec) {
             throw new UnsupportedOperationException();
         }
-    
+
         @Override
         public ContractDefinition findById(String definitionId) {
             throw new UnsupportedOperationException();
         }
-    
+
         @Override
         public void save(Collection<ContractDefinition> definitions) {
             contractDefinitions.addAll(definitions);

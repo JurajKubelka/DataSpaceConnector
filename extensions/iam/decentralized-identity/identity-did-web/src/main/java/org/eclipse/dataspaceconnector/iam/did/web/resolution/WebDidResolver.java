@@ -26,7 +26,6 @@ import org.jetbrains.annotations.NotNull;
 import java.io.IOException;
 
 import static java.lang.String.format;
-import static org.eclipse.dataspaceconnector.iam.did.web.resolution.DidFunctions.keyToUrl;
 
 /**
  * Resolves a Web DID according to the Web DID specification (https://w3c-ccg.github.io/did-method-web).
@@ -37,12 +36,14 @@ public class WebDidResolver implements DidResolver {
     private final OkHttpClient httpClient;
     private final ObjectMapper mapper;
     private final Monitor monitor;
+    private final WebDidUrlResolver urlResolver;
 
     /**
      * Creates a resolver that executes standard DNS lookups.
      */
-    public WebDidResolver(OkHttpClient httpClient, ObjectMapper mapper, Monitor monitor) {
+    public WebDidResolver(OkHttpClient httpClient, boolean useHttpsScheme, ObjectMapper mapper, Monitor monitor) {
         this.httpClient = httpClient;
+        this.urlResolver = new WebDidUrlResolver(useHttpsScheme);
         this.mapper = mapper;
         this.monitor = monitor;
     }
@@ -55,29 +56,29 @@ public class WebDidResolver implements DidResolver {
     @Override
     @NotNull
     public Result<DidDocument> resolve(String didKey) {
+        String url;
         try {
-            var request = new Request.Builder().url(keyToUrl(didKey)).get().build();
-
-            try (var response = httpClient.newCall(request).execute()) {
-                if (response.code() != 200) {
-                    return Result.failure(format("Error resolving DID: %s. HTTP Code was: %s", didKey, response.code()));
-                }
-                try (var body = response.body()) {
-                    if (body == null) {
-                        return Result.failure("DID response contained an empty body: " + didKey);
-                    }
-                    DidDocument didDocument = mapper.readValue(body.string(), DidDocument.class);
-                    return Result.success(didDocument);
-                }
-            } catch (IOException e) {
-                monitor.severe("Error resolving DID: " + didKey, e);
-                return Result.failure("Error resolving DID: " + e.getMessage());
-            }
+            url = urlResolver.apply(didKey);
         } catch (IllegalArgumentException e) {
             monitor.severe("Invalid DID key: " + didKey, e);
             return Result.failure("Invalid DID key: " + e.getMessage());
         }
+        
+        var request = new Request.Builder().url(url).get().build();
+        try (var response = httpClient.newCall(request).execute()) {
+            if (response.code() != 200) {
+                return Result.failure(format("Error resolving DID: %s. HTTP Code was: %s", didKey, response.code()));
+            }
+            try (var body = response.body()) {
+                if (body == null) {
+                    return Result.failure("DID response contained an empty body: " + didKey);
+                }
+                DidDocument didDocument = mapper.readValue(body.string(), DidDocument.class);
+                return Result.success(didDocument);
+            }
+        } catch (IOException e) {
+            monitor.severe("Error resolving DID: " + didKey, e);
+            return Result.failure("Error resolving DID: " + e.getMessage());
+        }
     }
-
-
 }

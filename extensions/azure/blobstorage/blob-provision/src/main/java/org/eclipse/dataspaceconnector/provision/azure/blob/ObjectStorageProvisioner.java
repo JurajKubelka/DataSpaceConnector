@@ -14,7 +14,7 @@
 
 package org.eclipse.dataspaceconnector.provision.azure.blob;
 
-import net.jodah.failsafe.RetryPolicy;
+import dev.failsafe.RetryPolicy;
 import org.eclipse.dataspaceconnector.azure.blob.core.AzureSasToken;
 import org.eclipse.dataspaceconnector.azure.blob.core.api.BlobStoreApi;
 import org.eclipse.dataspaceconnector.policy.model.Policy;
@@ -30,7 +30,7 @@ import org.jetbrains.annotations.NotNull;
 import java.time.OffsetDateTime;
 import java.util.concurrent.CompletableFuture;
 
-import static net.jodah.failsafe.Failsafe.with;
+import static dev.failsafe.Failsafe.with;
 
 public class ObjectStorageProvisioner implements Provisioner<ObjectStorageResourceDefinition, ObjectContainerProvisionedResource> {
     private final RetryPolicy<Object> retryPolicy;
@@ -58,7 +58,7 @@ public class ObjectStorageProvisioner implements Provisioner<ObjectStorageResour
         String containerName = resourceDefinition.getContainerName();
         String accountName = resourceDefinition.getAccountName();
 
-        monitor.info("Azure Storage Container request submitted: " + containerName);
+        monitor.debug("Azure Storage Container request submitted: " + containerName);
 
         OffsetDateTime expiryTime = OffsetDateTime.now().plusHours(1);
 

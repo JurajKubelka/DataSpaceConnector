@@ -14,6 +14,7 @@
 
 package org.eclipse.dataspaceconnector.contract.negotiation;
 
+import org.eclipse.dataspaceconnector.common.statemachine.retry.SendRetryManager;
 import org.eclipse.dataspaceconnector.contract.common.ContractId;
 import org.eclipse.dataspaceconnector.contract.observe.ContractNegotiationObservableImpl;
 import org.eclipse.dataspaceconnector.core.defaults.negotiationstore.InMemoryContractNegotiationStore;
@@ -23,16 +24,16 @@ import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.policy.model.PolicyType;
 import org.eclipse.dataspaceconnector.spi.command.CommandQueue;
 import org.eclipse.dataspaceconnector.spi.command.CommandRunner;
-import org.eclipse.dataspaceconnector.spi.contract.negotiation.observe.ContractNegotiationListener;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.observe.ContractNegotiationObservable;
 import org.eclipse.dataspaceconnector.spi.contract.validation.ContractValidationService;
+import org.eclipse.dataspaceconnector.spi.entity.StatefulEntity;
 import org.eclipse.dataspaceconnector.spi.iam.ClaimToken;
 import org.eclipse.dataspaceconnector.spi.message.MessageContext;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcher;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcherRegistry;
 import org.eclipse.dataspaceconnector.spi.monitor.ConsoleMonitor;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
-import org.eclipse.dataspaceconnector.spi.policy.store.PolicyStore;
+import org.eclipse.dataspaceconnector.spi.policy.store.PolicyDefinitionStore;
 import org.eclipse.dataspaceconnector.spi.response.StatusResult;
 import org.eclipse.dataspaceconnector.spi.types.domain.asset.Asset;
 import org.eclipse.dataspaceconnector.spi.types.domain.contract.agreement.ContractAgreementRequest;
@@ -49,7 +50,6 @@ import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
 
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.mock;
@@ -60,7 +60,7 @@ import static org.mockito.Mockito.when;
  */
 public abstract class AbstractContractNegotiationIntegrationTest {
 
-    protected final PolicyStore policyStore = mock(PolicyStore.class);
+    protected final PolicyDefinitionStore policyStore = mock(PolicyDefinitionStore.class);
     protected ProviderContractNegotiationManagerImpl providerManager;
     protected ConsumerContractNegotiationManagerImpl consumerManager;
     protected ContractNegotiationObservable providerObservable = new ContractNegotiationObservableImpl();
@@ -68,11 +68,10 @@ public abstract class AbstractContractNegotiationIntegrationTest {
     protected InMemoryContractNegotiationStore providerStore;
     protected InMemoryContractNegotiationStore consumerStore;
     protected ContractValidationService validationService;
+    protected SendRetryManager<StatefulEntity> sendRetryManager = mock(SendRetryManager.class);
     protected String consumerNegotiationId;
 
     protected ClaimToken token;
-
-    protected CountDownLatch countDownLatch;
 
     /**
      * Prepares the test setup
@@ -105,6 +104,7 @@ public abstract class AbstractContractNegotiationIntegrationTest {
                 .observable(providerObservable)
                 .store(providerStore)
                 .policyStore(policyStore)
+                .sendRetryManager(sendRetryManager)
                 .build();
 
         consumerManager = ConsumerContractNegotiationManagerImpl.Builder.newInstance()
@@ -117,9 +117,9 @@ public abstract class AbstractContractNegotiationIntegrationTest {
                 .observable(consumerObservable)
                 .store(consumerStore)
                 .policyStore(policyStore)
+                .sendRetryManager(sendRetryManager)
                 .build();
 
-        countDownLatch = new CountDownLatch(2);
     }
 
     /**
@@ -136,7 +136,6 @@ public abstract class AbstractContractNegotiationIntegrationTest {
                 .consumer(URI.create("consumer"))
                 .asset(Asset.Builder.newInstance().build())
                 .policy(Policy.Builder.newInstance()
-                        .id(UUID.randomUUID().toString())
                         .type(PolicyType.CONTRACT)
                         .assigner("assigner")
                         .assignee("assignee")
@@ -162,7 +161,6 @@ public abstract class AbstractContractNegotiationIntegrationTest {
                 .provider(URI.create("provider"))
                 .consumer(URI.create("consumer"))
                 .policy(Policy.Builder.newInstance()
-                        .id(UUID.randomUUID().toString())
                         .type(PolicyType.CONTRACT)
                         .assigner("assigner")
                         .assignee("assignee")
@@ -188,7 +186,6 @@ public abstract class AbstractContractNegotiationIntegrationTest {
                 .provider(URI.create("provider"))
                 .consumer(URI.create("consumer"))
                 .policy(Policy.Builder.newInstance()
-                        .id(UUID.randomUUID().toString())
                         .type(PolicyType.CONTRACT)
                         .assigner("assigner")
                         .assignee("assignee")
@@ -202,44 +199,8 @@ public abstract class AbstractContractNegotiationIntegrationTest {
     }
 
     /**
-     * Implementation of the ContractNegotiationListener that signals a CountDownLatch when the
-     * confirmed state has been reached.
-     */
-    protected static class ConfirmedContractNegotiationListener implements ContractNegotiationListener {
-
-        private final CountDownLatch countDownLatch;
-
-        public ConfirmedContractNegotiationListener(CountDownLatch countDownLatch) {
-            this.countDownLatch = countDownLatch;
-        }
-
-        @Override
-        public void preConfirmed(ContractNegotiation negotiation) {
-            countDownLatch.countDown();
-        }
-    }
-
-    /**
-     * Implementation of the ContractNegotiationListener that signals a CountDownLatch when the
-     * declined state has been reached.
-     */
-    protected static class DeclinedContractNegotiationListener implements ContractNegotiationListener {
-
-        private final CountDownLatch countDownLatch;
-
-        public DeclinedContractNegotiationListener(CountDownLatch countDownLatch) {
-            this.countDownLatch = countDownLatch;
-        }
-
-        @Override
-        public void preDeclined(ContractNegotiation negotiation) {
-            countDownLatch.countDown();
-        }
-    }
-
-    /**
-     * Implementation of the RemoteMessageDispatcherRegistry for the provider that delegates
-     * the requests to the consumer negotiation manager directly.
+     * Implementation of the RemoteMessageDispatcherRegistry for the provider that delegates the requests to the
+     * consumer negotiation manager directly.
      */
     protected class FakeProviderDispatcherRegistry implements RemoteMessageDispatcherRegistry {
 
@@ -280,8 +241,8 @@ public abstract class AbstractContractNegotiationIntegrationTest {
     }
 
     /**
-     * Implementation of the RemoteMessageDispatcherRegistry for the consumer that delegates
-     * the requests to the provider negotiation manager directly.
+     * Implementation of the RemoteMessageDispatcherRegistry for the consumer that delegates the requests to the
+     * provider negotiation manager directly.
      */
     protected class FakeConsumerDispatcherRegistry implements RemoteMessageDispatcherRegistry {
 

@@ -23,13 +23,13 @@ plugins {
 }
 
 dependencies {
-    api(project(":spi:core-spi"))
-    api(project(":spi:web-spi"))
+    api(project(":spi:common:core-spi"))
+    api(project(":spi:common:web-spi"))
     implementation(project(":common:util"))
     testImplementation(project(":data-protocols:ids"))
 
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
-    testImplementation(testFixtures(project(":launchers:junit")))
+    testImplementation(project(":extensions:junit"))
 }
 
 publishing {

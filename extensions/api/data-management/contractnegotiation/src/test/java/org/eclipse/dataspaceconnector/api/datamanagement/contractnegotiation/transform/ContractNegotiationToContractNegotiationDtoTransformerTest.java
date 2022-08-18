@@ -14,6 +14,7 @@
 
 package org.eclipse.dataspaceconnector.api.datamanagement.contractnegotiation.transform;
 
+import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.spi.transformer.TransformerContext;
 import org.eclipse.dataspaceconnector.spi.types.domain.contract.agreement.ContractAgreement;
 import org.eclipse.dataspaceconnector.spi.types.domain.contract.negotiation.ContractNegotiation;
@@ -60,6 +61,8 @@ class ContractNegotiationToContractNegotiationDtoTransformerTest {
         assertThat(dto.getProtocol()).isEqualTo("protocol");
         assertThat(dto.getCounterPartyAddress()).isEqualTo("counterPartyAddress");
         assertThat(dto.getErrorDetail()).isEqualTo("errorDetail");
+        assertThat(dto.getUpdatedAt()).isEqualTo(contractNegotiation.getUpdatedAt());
+        assertThat(dto.getCreatedAt()).isEqualTo(contractNegotiation.getCreatedAt());
     }
 
     private ContractAgreement createContractAgreement(String id) {
@@ -68,7 +71,7 @@ class ContractNegotiationToContractNegotiationDtoTransformerTest {
                 .consumerAgentId("any")
                 .providerAgentId("any")
                 .assetId(UUID.randomUUID().toString())
-                .policyId(UUID.randomUUID().toString())
+                .policy(Policy.Builder.newInstance().build())
                 .build();
     }
 

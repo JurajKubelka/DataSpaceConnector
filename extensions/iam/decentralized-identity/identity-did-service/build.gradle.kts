@@ -4,10 +4,11 @@ plugins {
 }
 
 dependencies {
-    api(project(":extensions:iam:decentralized-identity:identity-did-spi"))
+    api(project(":spi:common:identity-did-spi"))
     implementation(project(":extensions:iam:decentralized-identity:identity-did-crypto"))
 
     testImplementation(testFixtures(project(":extensions:iam:decentralized-identity:identity-common-test")))
+    testImplementation(project(":extensions:junit"))
 }
 
 publishing {

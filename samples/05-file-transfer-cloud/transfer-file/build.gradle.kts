@@ -16,15 +16,21 @@ plugins {
     `java-library`
 }
 
-val rsApi: String by project
+val openTelemetryVersion: String by project
 
 dependencies {
-    api(project(":spi"))
-    api(project(":extensions:azure:blobstorage:blob-core"))
+    api(project(":spi:control-plane:contract-spi"))
+    api(project(":spi:control-plane:policy-spi"))
+    implementation(project(":spi:data-plane:data-plane-spi"))
+    implementation(project(":core:transfer"))
+    implementation(project(":extensions:azure:data-plane:storage"))
+    implementation(project(":extensions:aws:data-plane-s3"))
+    implementation(project(":extensions:dataloading"))
+    implementation(project(":extensions:data-plane-transfer:data-plane-transfer-client"))
+    implementation(project(":extensions:data-plane-selector:selector-client"))
+    implementation(project(":extensions:data-plane-selector:selector-core"))
+    implementation(project(":extensions:data-plane-selector:selector-store"))
+    implementation(project(":extensions:data-plane:data-plane-framework"))
 
-    implementation(project(":extensions:azure:blobstorage:blob-data-operator"))
-    implementation(project(":extensions:aws:s3:s3-data-operator"))
-
-
-    implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
+    implementation("io.opentelemetry:opentelemetry-extension-annotations:${openTelemetryVersion}")
 }

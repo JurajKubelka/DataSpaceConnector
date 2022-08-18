@@ -42,7 +42,7 @@ class ContractDefinitionDocumentSerializationTest {
         String s = typeManager.writeValueAsString(document);
 
         assertThat(s).isNotNull()
-                .contains("\"selectorExpression\":{\"criteria\":[{\"left\":\"somekey\",\"op\":\"=\",\"right\":\"someval\"}]}}")
+                .contains("\"selectorExpression\":{\"criteria\":[{\"operandLeft\":\"somekey\",\"operator\":\"=\",\"operandRight\":\"someval\"}]}}")
                 .contains("wrappedInstance")
                 .contains("\"id\":\"" + def.getId() + "\"")
                 .contains("\"partitionKey\":\"" + pk + "\"");
@@ -58,4 +58,5 @@ class ContractDefinitionDocumentSerializationTest {
         var transferProcessDeserialized = typeManager.readValue(json, ContractDefinitionDocument.class);
         assertThat(transferProcessDeserialized).usingRecursiveComparison().isEqualTo(document);
     }
+
 }

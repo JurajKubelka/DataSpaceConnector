@@ -17,18 +17,16 @@ package org.eclipse.dataspaceconnector.dataplane.http;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.javafaker.Faker;
 import io.netty.handler.codec.http.HttpHeaderNames;
 import io.netty.handler.codec.http.HttpMethod;
 import io.restassured.specification.RequestSpecification;
-import org.eclipse.dataspaceconnector.common.annotations.ComponentTest;
-import org.eclipse.dataspaceconnector.dataplane.spi.DataPlaneConstants;
-import org.eclipse.dataspaceconnector.junit.launcher.EdcExtension;
-import org.eclipse.dataspaceconnector.spi.iam.ClaimToken;
+import net.datafaker.Faker;
+import org.eclipse.dataspaceconnector.common.util.junit.annotations.ComponentTest;
+import org.eclipse.dataspaceconnector.junit.extensions.EdcExtension;
 import org.eclipse.dataspaceconnector.spi.system.ConfigurationExtension;
 import org.eclipse.dataspaceconnector.spi.system.configuration.ConfigFactory;
 import org.eclipse.dataspaceconnector.spi.types.domain.DataAddress;
-import org.eclipse.dataspaceconnector.spi.types.domain.http.HttpDataAddressSchema;
+import org.eclipse.dataspaceconnector.spi.types.domain.HttpDataAddress;
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
@@ -47,11 +45,10 @@ import org.mockserver.model.MediaType;
 import org.mockserver.verify.VerificationTimes;
 
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Stream;
 
 import static io.restassured.RestAssured.given;
-import static org.eclipse.dataspaceconnector.common.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.dataspaceconnector.junit.testfixtures.TestUtils.getFreePort;
 import static org.mockserver.integration.ClientAndServer.startClientAndServer;
 import static org.mockserver.matchers.Times.once;
 import static org.mockserver.model.HttpRequest.request;
@@ -59,7 +56,7 @@ import static org.mockserver.model.HttpResponse.response;
 import static org.mockserver.stop.Stop.stopQuietly;
 
 /**
- * System Test for Data Plane HTTP extension.
+ * Integration tests for Data Plane public API querying to a http data source.
  */
 @ExtendWith(EdcExtension.class)
 @ComponentTest
@@ -98,7 +95,7 @@ public class DataPlaneHttpPullIntegrationTests {
             "web.http.control.port", String.valueOf(DPF_CONTROL_API_PORT),
             "web.http.public.port", String.valueOf(DPF_PUBLIC_API_PORT),
             "web.http.public.path", DPF_PUBLIC_PATH,
-            "edc.controlplane.validation-endpoint", VALIDATION_API_HOST
+            "edc.dataplane.token.validation.endpoint", VALIDATION_API_HOST
     );
 
     @BeforeAll
@@ -111,6 +108,34 @@ public class DataPlaneHttpPullIntegrationTests {
     public static void tearDown() {
         stopQuietly(httpSourceClientAndServer);
         stopQuietly(validationClientAndServer);
+    }
+
+    private static Stream<Arguments> providerTestInstances() {
+        var get = new Scenario(HttpMethod.GET.name());
+        var path = FAKER.lorem().word() + "/" + FAKER.lorem().word();
+        var body = FAKER.lorem().sentence();
+
+        var getWithQueryParams = new Scenario(HttpMethod.GET.name())
+                .queryParam(FAKER.lorem().word(), FAKER.lorem().word())
+                .queryParam(FAKER.lorem().word(), FAKER.lorem().word());
+
+        var getWithPath = new Scenario(HttpMethod.GET.name())
+                .path(path);
+
+        var post = new Scenario(HttpMethod.POST.name())
+                .requestBody(body);
+
+        var postWithPath = new Scenario(HttpMethod.POST.name())
+                .path(path)
+                .requestBody(body);
+
+        return Stream.of(
+                Arguments.of("POST", post),
+                Arguments.of("GET", get),
+                Arguments.of("GET WITH QUERY PARAMS", getWithQueryParams),
+                Arguments.of("GET WITH PATH", getWithPath),
+                Arguments.of("POST WITH PATH", postWithPath)
+        );
     }
 
     @BeforeEach
@@ -129,153 +154,86 @@ public class DataPlaneHttpPullIntegrationTests {
 
     @ParameterizedTest(name = "{index} {0}")
     @MethodSource("providerTestInstances")
-    void test(String name, TestInstance instance) throws JsonProcessingException {
-        instance.execute();
-    }
+    void test(String name, Scenario scenario) throws JsonProcessingException {
+        // prepare server of the data source
+        httpSourceClientAndServer.when(scenario.expectedSourceRequest, once())
+                .respond(withResponse(HttpStatusCode.OK_200, OBJECT_MAPPER.writeValueAsString(scenario.sourceResponse)));
 
+        // prepare validation server of the control plane
+        var validationRequest = request().withMethod(HttpMethod.GET.name()).withHeader(AUTH_HEADER_KEY, scenario.token);
+        validationClientAndServer.when(validationRequest, once())
+                .respond(withResponse(HttpStatusCode.OK_200, OBJECT_MAPPER.writeValueAsString(scenario.sourceAddress)));
 
-    private static Stream<Arguments> providerTestInstances() {
-        var get = new TestInstance(HttpMethod.GET.name());
+        scenario.dataplaneRequest.request(scenario.method).then().assertThat()
+                .statusCode(200)
+                .body("some", CoreMatchers.equalTo("info"));
 
-        var getWithQueryParams = new TestInstance(HttpMethod.GET.name())
-                .queryParam("foo", "bar")
-                .queryParam("hello", "world");
-
-
-        var getWithPathParams = new TestInstance(HttpMethod.GET.name())
-                .basePath("hello/world");
-
-        var post = new TestInstance(HttpMethod.POST.name())
-                .requestBody("hello world!");
-
-        var postWithPathParams = new TestInstance(HttpMethod.POST.name())
-                .basePath("hello/world")
-                .requestBody("hello world!");
-
-        return Stream.of(
-                Arguments.of("POST", post),
-                Arguments.of("GET", get),
-                Arguments.of("GET WITH QUERY PARAMS", getWithQueryParams),
-                Arguments.of("GET WITH PATH PARAMS", getWithPathParams),
-                Arguments.of("POST WITH PATH PARAMS", postWithPathParams)
-        );
+        httpSourceClientAndServer.verify(scenario.expectedSourceRequest, VerificationTimes.once());
     }
 
     /**
-     * One test instance for the parameterized test.
+     * Mock plain text response from source.
+     *
+     * @param statusCode   Response status code.
+     * @param responseBody Response body.
+     * @return see {@link HttpResponse}
      */
-    private static final class TestInstance {
-        private final String token = FAKER.internet().uuid();
-        private DataAddress dataSource = testHttpSource();
-        private final Map<String, String> sourceResponse = Map.of("some", "info");
+    private HttpResponse withResponse(HttpStatusCode statusCode, String responseBody) {
+        var response = response()
+                .withStatusCode(statusCode.code());
 
+        if (responseBody != null) {
+            response.withHeader(
+                            new Header(HttpHeaderNames.CONTENT_TYPE.toString(),
+                                    MediaType.APPLICATION_JSON.toString())
+                    )
+                    .withBody(responseBody);
+        }
+
+        return response;
+    }
+
+    private static final class Scenario {
+        private final Map<String, String> sourceResponse = Map.of("some", "info");
         private final String method;
+        private final String token;
         private final RequestSpecification dataplaneRequest;
         private final HttpRequest expectedSourceRequest;
+        private final DataAddress sourceAddress;
 
-        TestInstance(String method) {
+        Scenario(String method) {
             this.method = method;
-            dataplaneRequest = givenDpfRequest(token);
+            token = FAKER.internet().uuid();
+            dataplaneRequest = given()
+                    .baseUri(DPF_PUBLIC_API_HOST)
+                    .basePath(DPF_DATA_PATH)
+                    .header(AUTH_HEADER_KEY, token);
+            sourceAddress = HttpDataAddress.Builder.newInstance()
+                    .baseUrl(HTTP_SOURCE_API_HOST)
+                    .proxyBody(Boolean.TRUE.toString())
+                    .proxyMethod(Boolean.TRUE.toString())
+                    .proxyPath(Boolean.TRUE.toString())
+                    .proxyQueryParams(Boolean.TRUE.toString())
+                    .build();
             expectedSourceRequest = new HttpRequest();
         }
 
-        public TestInstance dataSource(DataAddress dataSource) {
-            this.dataSource = dataSource;
-            return this;
-        }
-
-        public TestInstance requestBody(String requestBody) {
+        public Scenario requestBody(String requestBody) {
             dataplaneRequest.body(requestBody);
             expectedSourceRequest.withBody(requestBody);
             return this;
         }
 
-        public TestInstance basePath(String basePath) {
-            dataplaneRequest.basePath(DPF_DATA_PATH + basePath);
-            expectedSourceRequest.withPath(basePath.startsWith("/") ? basePath : String.format("/%s", basePath));
+        public Scenario path(String path) {
+            dataplaneRequest.basePath(DPF_DATA_PATH + path);
+            expectedSourceRequest.withPath(path.startsWith("/") ? path : "/" + path);
             return this;
         }
 
-        public TestInstance queryParam(String key, String value) {
+        public Scenario queryParam(String key, String value) {
             dataplaneRequest.queryParam(key, value);
             expectedSourceRequest.withQueryStringParameter(key, value);
             return this;
-        }
-
-        public void execute() throws JsonProcessingException {
-            Objects.requireNonNull(method);
-            setUpValidationServer();
-            setUpDataSourceServer();
-
-            dataplaneRequest.request(method).then().assertThat().statusCode(200).body("some", CoreMatchers.equalTo("info"));
-
-            httpSourceClientAndServer.verify(expectedSourceRequest, VerificationTimes.once());
-        }
-
-        private RequestSpecification givenDpfRequest(String token) {
-            return given()
-                    .baseUri(DPF_PUBLIC_API_HOST)
-                    .basePath(DPF_DATA_PATH)
-                    .header(AUTH_HEADER_KEY, token);
-        }
-
-        /**
-         * Prepare data source server so that it returns the desired response if the expected request is received.
-         */
-        private void setUpDataSourceServer() throws JsonProcessingException {
-            httpSourceClientAndServer.when(expectedSourceRequest, once())
-                    .respond(withResponse(HttpStatusCode.OK_200, OBJECT_MAPPER.writeValueAsString(sourceResponse)));
-        }
-
-        /**
-         * Prepare the validation server to make it return the desired source data address embedded within a {@link ClaimToken}
-         * in exchange for the input token that is used in input of the DPF public API request.
-         */
-        private void setUpValidationServer() throws JsonProcessingException {
-            var claimToken = ClaimToken.Builder.newInstance()
-                    .claim(DataPlaneConstants.DATA_ADDRESS, OBJECT_MAPPER.writeValueAsString(dataSource))
-                    .build();
-
-            var validationRequest = request().withMethod(HttpMethod.GET.name()).withHeader(AUTH_HEADER_KEY, token);
-
-            validationClientAndServer.when(validationRequest, once())
-                    .respond(withResponse(HttpStatusCode.OK_200, OBJECT_MAPPER.writeValueAsString(claimToken)));
-        }
-
-        /**
-         * Mock plain text response from source.
-         *
-         * @param statusCode   Response status code.
-         * @param responseBody Response body.
-         * @return see {@link HttpResponse}
-         */
-        private HttpResponse withResponse(HttpStatusCode statusCode, String responseBody) {
-            var response = response()
-                    .withStatusCode(statusCode.code());
-
-            if (responseBody != null) {
-                response.withHeader(
-                                new Header(HttpHeaderNames.CONTENT_TYPE.toString(),
-                                        MediaType.APPLICATION_JSON.toString())
-                        )
-                        .withBody(responseBody);
-            }
-
-            return response;
-        }
-
-        /**
-         * Create a minimal http address composed of an endpoint only.
-         */
-        private DataAddress testHttpSource() {
-            return DataAddress.Builder.newInstance()
-                    .type(HttpDataAddressSchema.TYPE)
-                    .property(HttpDataAddressSchema.ENDPOINT, HTTP_SOURCE_API_HOST)
-                    .property(HttpDataAddressSchema.PROXY_BODY, "true")
-                    .property(HttpDataAddressSchema.PROXY_METHOD, "true")
-                    .property(HttpDataAddressSchema.PROXY_PATH, "true")
-                    .property(HttpDataAddressSchema.PROXY_QUERY_PARAMS, "true")
-                    .build();
         }
     }
 }

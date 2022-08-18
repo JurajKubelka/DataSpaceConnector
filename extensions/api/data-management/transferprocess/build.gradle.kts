@@ -12,11 +12,11 @@
  *
  */
 
-
+val awaitility: String by project
 val infoModelVersion: String by project
-val rsApi: String by project
 val jerseyVersion: String by project
 val restAssured: String by project
+val rsApi: String by project
 
 plugins {
     `java-library`
@@ -24,23 +24,23 @@ plugins {
 }
 
 dependencies {
-    api(project(":spi:transfer-spi"))
+    api(project(":spi:common:transaction-spi"))
+    api(project(":spi:control-plane:transfer-spi"))
     implementation(project(":common:util"))
     implementation(project(":extensions:api:api-core"))
-    implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
     implementation(project(":extensions:api:data-management:api-configuration"))
-    implementation(project(":extensions:transaction:transaction-spi"))
 
-    testImplementation(project(":spi:core-spi"))
+    implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
+
     testImplementation(project(":core:contract"))
     testImplementation(project(":core:transfer"))
     testImplementation(project(":extensions:http"))
     testImplementation(project(":core:defaults"))
 
-    testImplementation(testFixtures(project(":launchers:junit")))
-    testImplementation(testFixtures(project(":common:util")))
+    testImplementation(project(":extensions:junit"))
+
     testImplementation("io.rest-assured:rest-assured:${restAssured}")
-    testRuntimeOnly("org.glassfish.jersey.ext:jersey-bean-validation:${jerseyVersion}") //for validation
+    testImplementation("org.awaitility:awaitility:${awaitility}")
 }
 
 publishing {

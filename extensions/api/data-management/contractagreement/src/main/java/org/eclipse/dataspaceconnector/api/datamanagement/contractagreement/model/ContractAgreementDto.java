@@ -18,26 +18,27 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Positive;
+import org.eclipse.dataspaceconnector.policy.model.Policy;
 
 public class ContractAgreementDto {
-    @NotNull
+    @NotNull(message = "id cannot be null")
     private String id;
-    @NotNull
+    @NotNull(message = "providerAgentId cannot be null")
     private String providerAgentId;
-    @NotNull
+    @NotNull(message = "consumerAgentId cannot be null")
     private String consumerAgentId;
-    @Positive
+    @Positive(message = "contractSigningDate must be greater than 0")
     private long contractSigningDate;
-    @Positive
+    @Positive(message = "contractStartDate must be greater than 0")
     private long contractStartDate;
-    @Positive
+    @Positive(message = "contractEndDate must be greater than 0")
     private long contractEndDate;
-    @NotNull
+    @NotNull(message = "assetId Id cannot be null")
     private String assetId;
-    @NotNull
-    private String policyId;
+    @NotNull(message = "policy cannot be null")
+    private Policy policy;
 
-    @AssertTrue
+    @AssertTrue(message = "contractStartDate and contractSigningDate must be lower than contractEndDate")
     @JsonIgnore
     public boolean isDatesValid() {
 
@@ -73,8 +74,8 @@ public class ContractAgreementDto {
         return assetId;
     }
 
-    public String getPolicyId() {
-        return policyId;
+    public @NotNull Policy getPolicy() {
+        return policy;
     }
 
     public static final class Builder {
@@ -123,8 +124,8 @@ public class ContractAgreementDto {
             return this;
         }
 
-        public Builder policyId(String policyId) {
-            agreement.policyId = policyId;
+        public Builder policy(Policy policy) {
+            agreement.policy = policy;
             return this;
         }
 

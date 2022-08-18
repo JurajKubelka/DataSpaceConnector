@@ -14,8 +14,8 @@
 
 package org.eclipse.dataspaceconnector.transfer.dataplane.sync.proxy;
 
-import com.github.javafaker.Faker;
 import com.nimbusds.jwt.JWTClaimsSet;
+import net.datafaker.Faker;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -24,8 +24,8 @@ import java.time.Instant;
 import java.util.Date;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.dataspaceconnector.dataplane.spi.DataPlaneConstants.CONTRACT_ID;
-import static org.eclipse.dataspaceconnector.dataplane.spi.DataPlaneConstants.DATA_ADDRESS;
+import static org.eclipse.dataspaceconnector.transfer.dataplane.spi.DataPlaneTransferConstants.CONTRACT_ID;
+import static org.eclipse.dataspaceconnector.transfer.dataplane.spi.DataPlaneTransferConstants.DATA_ADDRESS;
 
 class DataPlaneProxyTokenDecoratorTest {
     private static final Faker FAKER = new Faker();

@@ -43,7 +43,9 @@ public abstract class SingleTransferProcessCommandHandler<T extends SingleTransf
             throw new EdcException(format("Could not find TransferProcess with ID [%s]", transferProcessId));
         } else {
             if (modify(transferProcess)) {
+                transferProcess.setModified();
                 store.update(transferProcess);
+                postAction(transferProcess);
             }
         }
     }
@@ -57,4 +59,11 @@ public abstract class SingleTransferProcessCommandHandler<T extends SingleTransf
      * @return true if the process was actually modified, false otherwise.
      */
     protected abstract boolean modify(TransferProcess process);
+
+    /**
+     * Method that would be called after the entity update has been persisted.
+     *
+     * @param process the modified TransferProcess
+     */
+    protected abstract void postAction(TransferProcess process);
 }

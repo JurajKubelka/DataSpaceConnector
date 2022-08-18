@@ -16,7 +16,7 @@
 
 package org.eclipse.dataspaceconnector.transfer.core.transfer;
 
-import org.eclipse.dataspaceconnector.common.annotations.ComponentTest;
+import org.eclipse.dataspaceconnector.common.util.junit.annotations.ComponentTest;
 import org.eclipse.dataspaceconnector.core.defaults.transferprocessstore.InMemoryTransferProcessStore;
 import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.spi.asset.DataAddressResolver;
@@ -25,6 +25,7 @@ import org.eclipse.dataspaceconnector.spi.command.CommandRunner;
 import org.eclipse.dataspaceconnector.spi.message.RemoteMessageDispatcherRegistry;
 import org.eclipse.dataspaceconnector.spi.monitor.Monitor;
 import org.eclipse.dataspaceconnector.spi.policy.store.PolicyArchive;
+import org.eclipse.dataspaceconnector.spi.result.Result;
 import org.eclipse.dataspaceconnector.spi.retry.ExponentialWaitStrategy;
 import org.eclipse.dataspaceconnector.spi.transfer.flow.DataFlowManager;
 import org.eclipse.dataspaceconnector.spi.transfer.observe.TransferProcessObservable;
@@ -45,6 +46,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
@@ -72,11 +74,10 @@ class TransferProcessManagerImplIntegrationTest {
     private final TransferProcessStore store = new InMemoryTransferProcessStore();
     private TransferProcessManagerImpl transferProcessManager;
 
-    @SuppressWarnings("unchecked")
     @BeforeEach
     void setup() {
         var resourceManifest = ResourceManifest.Builder.newInstance().definitions(List.of(new TestResourceDefinition())).build();
-        when(manifestGenerator.generateConsumerResourceManifest(any(DataRequest.class), any(Policy.class))).thenReturn(resourceManifest);
+        when(manifestGenerator.generateConsumerResourceManifest(any(DataRequest.class), any(Policy.class))).thenReturn(Result.success(resourceManifest));
 
         var policyArchive = mock(PolicyArchive.class);
         when(policyArchive.findPolicyForContract(anyString())).thenReturn(Policy.Builder.newInstance().build());
@@ -89,6 +90,7 @@ class TransferProcessManagerImplIntegrationTest {
                 .dispatcherRegistry(mock(RemoteMessageDispatcherRegistry.class))
                 .manifestGenerator(manifestGenerator)
                 .monitor(mock(Monitor.class))
+                .clock(Clock.systemUTC())
                 .commandQueue(mock(CommandQueue.class))
                 .commandRunner(mock(CommandRunner.class))
                 .typeManager(new TypeManager())

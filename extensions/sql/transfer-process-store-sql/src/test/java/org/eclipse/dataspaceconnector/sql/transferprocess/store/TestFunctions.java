@@ -21,9 +21,10 @@ import org.eclipse.dataspaceconnector.spi.types.domain.transfer.ResourceManifest
 import org.eclipse.dataspaceconnector.spi.types.domain.transfer.TransferProcess;
 import org.eclipse.dataspaceconnector.spi.types.domain.transfer.TransferProcessStates;
 
+import java.time.Clock;
 import java.util.UUID;
 
-class TestFunctions {
+public class TestFunctions {
 
     public static ResourceManifest createManifest() {
         return ResourceManifest.Builder.newInstance()
@@ -34,11 +35,10 @@ class TestFunctions {
         return createDataRequest("test-process-id");
     }
 
-    public static DataRequest createDataRequest(String pid) {
+    public static DataRequest.Builder createDataRequestBuilder() {
         return DataRequest.Builder.newInstance()
                 .id(UUID.randomUUID().toString())
-                .dataDestination(DataAddress.Builder.newInstance()
-                        .type("Test Address Type")
+                .dataDestination(createDataAddressBuilder("Test Address Type")
                         .keyName("Test Key Name")
                         .build())
                 .connectorAddress("http://some-connector.com")
@@ -47,7 +47,11 @@ class TestFunctions {
                 .contractId("some-contract")
                 .managedResources(false)
                 .assetId(Asset.Builder.newInstance().id("asset-id").build().getId())
-                .processId(pid)
+                .processId("test-process-id");
+    }
+
+    public static DataRequest createDataRequest(String transferProcessId) {
+        return createDataRequestBuilder().processId(transferProcessId)
                 .build();
     }
 
@@ -56,27 +60,32 @@ class TestFunctions {
     }
 
     public static TransferProcess createTransferProcess(String processId, TransferProcessStates state) {
-        return TransferProcess.Builder.newInstance()
-                .id(processId)
-                .state(state.code())
-                .type(TransferProcess.Type.CONSUMER)
-                .dataRequest(createDataRequest())
-                .contentDataAddress(DataAddress.Builder.newInstance().type("any").build())
-                .resourceManifest(createManifest())
-                .build();
+        return createTransferProcessBuilder(processId).state(state.code()).build();
     }
 
     public static TransferProcess createTransferProcess(String processId, DataRequest dataRequest) {
-        return TransferProcess.Builder.newInstance()
-                .id(processId)
-                .state(TransferProcessStates.UNSAVED.code())
-                .type(TransferProcess.Type.CONSUMER)
-                .dataRequest(dataRequest)
-                .resourceManifest(createManifest())
-                .build();
+        return createTransferProcessBuilder(processId).dataRequest(dataRequest).build();
     }
 
     public static TransferProcess createTransferProcess(String processId) {
-        return createTransferProcess(processId, TransferProcessStates.UNSAVED);
+        return createTransferProcessBuilder(processId)
+                .state(TransferProcessStates.UNSAVED.code())
+                .build();
+    }
+
+    public static TransferProcess.Builder createTransferProcessBuilder(String processId) {
+        return TransferProcess.Builder.newInstance()
+                .id(processId)
+                .createdAt(Clock.systemUTC().millis())
+                .state(TransferProcessStates.UNSAVED.code())
+                .type(TransferProcess.Type.CONSUMER)
+                .dataRequest(createDataRequest())
+                .contentDataAddress(createDataAddressBuilder("any").build())
+                .resourceManifest(createManifest());
+    }
+
+    public static DataAddress.Builder createDataAddressBuilder(String type) {
+        return DataAddress.Builder.newInstance()
+                .type(type);
     }
 }

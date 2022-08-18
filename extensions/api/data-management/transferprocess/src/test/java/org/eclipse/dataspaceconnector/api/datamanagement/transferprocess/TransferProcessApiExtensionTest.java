@@ -14,16 +14,17 @@
 
 package org.eclipse.dataspaceconnector.api.datamanagement.transferprocess;
 
-import com.github.javafaker.Faker;
+import net.datafaker.Faker;
 import org.eclipse.dataspaceconnector.api.datamanagement.configuration.DataManagementApiConfiguration;
 import org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.model.TransferProcessDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.transferprocess.transform.TransferProcessTransformerTestData;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistry;
 import org.eclipse.dataspaceconnector.api.transformer.DtoTransformerRegistryImpl;
-import org.eclipse.dataspaceconnector.junit.launcher.DependencyInjectionExtension;
+import org.eclipse.dataspaceconnector.junit.extensions.DependencyInjectionExtension;
 import org.eclipse.dataspaceconnector.spi.WebService;
 import org.eclipse.dataspaceconnector.spi.system.ServiceExtensionContext;
 import org.eclipse.dataspaceconnector.spi.system.injection.ObjectFactory;
+import org.eclipse.dataspaceconnector.spi.transaction.TransactionContext;
 import org.eclipse.dataspaceconnector.spi.transfer.TransferProcessManager;
 import org.eclipse.dataspaceconnector.spi.transfer.store.TransferProcessStore;
 import org.junit.jupiter.api.Test;
@@ -49,6 +50,7 @@ class TransferProcessApiExtensionTest {
         context.registerService(WebService.class, webServiceMock);
         var mockConfiguration = new DataManagementApiConfiguration(contextAlias);
         context.registerService(DataManagementApiConfiguration.class, mockConfiguration);
+        context.registerService(TransactionContext.class, mock(TransactionContext.class));
         context.registerService(TransferProcessManager.class, mock(TransferProcessManager.class));
         context.registerService(TransferProcessStore.class, mock(TransferProcessStore.class));
 

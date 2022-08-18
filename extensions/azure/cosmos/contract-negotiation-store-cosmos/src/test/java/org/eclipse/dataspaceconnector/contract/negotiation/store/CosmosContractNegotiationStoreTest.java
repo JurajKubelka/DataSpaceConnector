@@ -16,10 +16,10 @@
 package org.eclipse.dataspaceconnector.contract.negotiation.store;
 
 import com.azure.cosmos.models.SqlQuerySpec;
-import net.jodah.failsafe.RetryPolicy;
+import dev.failsafe.RetryPolicy;
 import org.eclipse.dataspaceconnector.azure.cosmos.CosmosDbApi;
-import org.eclipse.dataspaceconnector.common.matchers.PredicateMatcher;
 import org.eclipse.dataspaceconnector.contract.negotiation.store.model.ContractNegotiationDocument;
+import org.eclipse.dataspaceconnector.junit.matchers.PredicateMatcher;
 import org.eclipse.dataspaceconnector.spi.query.QuerySpec;
 import org.eclipse.dataspaceconnector.spi.query.SortOrder;
 import org.eclipse.dataspaceconnector.spi.types.TypeManager;
@@ -36,7 +36,6 @@ import java.util.stream.Stream;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.eclipse.dataspaceconnector.contract.negotiation.store.TestFunctions.generateDocument;
-import static org.eclipse.dataspaceconnector.contract.negotiation.store.TestFunctions.generateNegotiation;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.argThat;
@@ -57,7 +56,7 @@ class CosmosContractNegotiationStoreTest {
     void setup() {
         cosmosDbApi = mock(CosmosDbApi.class);
         var typeManager = new TypeManager();
-        var retryPolicy = new RetryPolicy<>();
+        var retryPolicy = RetryPolicy.ofDefaults();
         store = new CosmosContractNegotiationStore(cosmosDbApi, typeManager, retryPolicy, "test-connector");
     }
 
@@ -103,7 +102,7 @@ class CosmosContractNegotiationStoreTest {
 
     @Test
     void save() {
-        var negotiation = generateNegotiation();
+        var negotiation = TestFunctions.createNegotiation();
 
         store.save(negotiation);
 

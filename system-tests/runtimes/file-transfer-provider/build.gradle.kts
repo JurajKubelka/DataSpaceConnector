@@ -18,13 +18,13 @@ val openTelemetryVersion: String by project
 plugins {
     `java-library`
     id("application")
-    id("com.github.johnrengelman.shadow") version "7.0.0"
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 val rsApi: String by project
 
 dependencies {
-    api(project(":spi"))
+    implementation(project(":core"))
     implementation(project(":common:util"))
 
     implementation(project(":core:transfer"))
@@ -34,28 +34,19 @@ dependencies {
     implementation(project(":extensions:data-plane-selector:selector-store"))
     implementation(project(":extensions:data-plane:data-plane-framework"))
 
-    implementation(project(":extensions:data-plane:data-plane-spi"))
-
+    implementation(project(":spi:data-plane:data-plane-spi"))
 
     api(project(":extensions:dataloading"))
 
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
     implementation("io.opentelemetry:opentelemetry-extension-annotations:${openTelemetryVersion}")
 
-    implementation(project(":core"))
-
-
-
-
-
     implementation(project(":extensions:api:observability"))
 
     implementation(project(":extensions:filesystem:configuration-fs"))
     implementation(project(":extensions:iam:iam-mock"))
 
-    implementation(project(":data-protocols:ids")) {
-        exclude("org.eclipse.dataspaceconnector","ids-token-validation")
-    }
+    implementation(project(":data-protocols:ids"))
 }
 
 application {

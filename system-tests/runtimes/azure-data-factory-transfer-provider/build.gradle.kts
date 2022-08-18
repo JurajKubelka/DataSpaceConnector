@@ -16,7 +16,7 @@
 plugins {
     `java-library`
     id("application")
-    id("com.github.johnrengelman.shadow") version "7.0.0"
+    id("com.github.johnrengelman.shadow") version "7.1.2"
 }
 
 val rsApi: String by project
@@ -26,7 +26,6 @@ val azureResourceManagerVersion: String by project
 
 
 dependencies {
-    api(project(":spi"))
     implementation(project(":common:util"))
 
     implementation(project(":core:transfer"))
@@ -44,7 +43,7 @@ dependencies {
     implementation("com.azure.resourcemanager:azure-resourcemanager:${azureResourceManagerVersion}")
     implementation("com.azure.resourcemanager:azure-resourcemanager-authorization:${azureResourceManagerVersion}")
 
-    implementation(project(":extensions:data-plane:data-plane-spi"))
+    implementation(project(":spi:data-plane:data-plane-spi"))
 
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
 
@@ -58,9 +57,7 @@ dependencies {
     implementation(project(":extensions:azure:blobstorage"))
     implementation(project(":extensions:azure:vault"))
 
-    implementation(project(":data-protocols:ids")) {
-        exclude("org.eclipse.dataspaceconnector","ids-token-validation")
-    }
+    implementation(project(":data-protocols:ids"))
 }
 
 application {

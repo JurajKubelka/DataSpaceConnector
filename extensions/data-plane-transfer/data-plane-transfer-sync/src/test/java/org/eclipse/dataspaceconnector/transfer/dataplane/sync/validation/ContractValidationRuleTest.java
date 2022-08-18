@@ -14,23 +14,27 @@
 
 package org.eclipse.dataspaceconnector.transfer.dataplane.sync.validation;
 
-import com.github.javafaker.Faker;
 import com.nimbusds.jose.JWSAlgorithm;
 import com.nimbusds.jose.JWSHeader;
 import com.nimbusds.jwt.JWTClaimsSet;
 import com.nimbusds.jwt.SignedJWT;
+import net.datafaker.Faker;
+import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.store.ContractNegotiationStore;
 import org.eclipse.dataspaceconnector.spi.types.domain.contract.agreement.ContractAgreement;
 import org.jetbrains.annotations.NotNull;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Clock;
 import java.time.Instant;
 import java.util.UUID;
 
+import static java.time.ZoneOffset.UTC;
 import static java.time.temporal.ChronoUnit.HOURS;
 import static java.time.temporal.ChronoUnit.SECONDS;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.dataspaceconnector.dataplane.spi.DataPlaneConstants.CONTRACT_ID;
+import static org.eclipse.dataspaceconnector.transfer.dataplane.spi.DataPlaneTransferConstants.CONTRACT_ID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -38,15 +42,23 @@ import static org.mockito.Mockito.when;
 class ContractValidationRuleTest {
 
     private static final Faker FAKER = new Faker();
+    private final Instant now = Instant.now();
+    private final Clock clock = Clock.fixed(now, UTC);
 
-    private final ContractNegotiationStore contractNegotiationStore = mock(ContractNegotiationStore.class);
-    private final ContractValidationRule rule = new ContractValidationRule(contractNegotiationStore);
+    private final ContractNegotiationStore contractNegotiationStoreMock = mock(ContractNegotiationStore.class);
+    private ContractValidationRule rule;
+
+
+    @BeforeEach
+    public void setUp() {
+        rule = new ContractValidationRule(contractNegotiationStoreMock, clock);
+    }
 
     @Test
     void shouldSucceedIfContractIsStillValid() {
         var contractId = FAKER.internet().uuid();
-        var contractAgreement = createContractAgreement(contractId, Instant.now().plus(1, HOURS));
-        when(contractNegotiationStore.findContractAgreement(contractId)).thenReturn(contractAgreement);
+        var contractAgreement = createContractAgreement(contractId, now.plus(1, HOURS));
+        when(contractNegotiationStoreMock.findContractAgreement(contractId)).thenReturn(contractAgreement);
         var claims = new JWTClaimsSet.Builder()
                 .claim(CONTRACT_ID, contractId)
                 .build();
@@ -59,8 +71,8 @@ class ContractValidationRuleTest {
     @Test
     void shouldFailIfContractIsExpired() {
         var contractId = FAKER.internet().uuid();
-        var contractAgreement = createContractAgreement(contractId, Instant.now().minus(1, SECONDS));
-        when(contractNegotiationStore.findContractAgreement(contractId)).thenReturn(contractAgreement);
+        var contractAgreement = createContractAgreement(contractId, now.minus(1, SECONDS));
+        when(contractNegotiationStoreMock.findContractAgreement(contractId)).thenReturn(contractAgreement);
         var claims = new JWTClaimsSet.Builder()
                 .claim(CONTRACT_ID, contractId)
                 .build();
@@ -81,9 +93,9 @@ class ContractValidationRuleTest {
 
     @Test
     void shouldFailIfContractIdContractDoesNotExist() {
-        when(contractNegotiationStore.findContractAgreement(any())).thenReturn(null);
+        when(contractNegotiationStoreMock.findContractAgreement(any())).thenReturn(null);
         var claims = new JWTClaimsSet.Builder()
-                .claim(CONTRACT_ID, "unexistentContractId")
+                .claim(CONTRACT_ID, "unknownContractId")
                 .build();
 
         var result = rule.checkRule(createJwtWith(claims));
@@ -101,10 +113,10 @@ class ContractValidationRuleTest {
         return ContractAgreement.Builder.newInstance()
                 .id(contractId)
                 .assetId(UUID.randomUUID().toString())
-                .policyId(UUID.randomUUID().toString())
+                .policy(Policy.Builder.newInstance().build())
                 .contractEndDate(endDate.getEpochSecond())
-                .consumerAgentId("any")
-                .providerAgentId("any")
+                .consumerAgentId(FAKER.lorem().word())
+                .providerAgentId(FAKER.lorem().word())
                 .build();
     }
 }

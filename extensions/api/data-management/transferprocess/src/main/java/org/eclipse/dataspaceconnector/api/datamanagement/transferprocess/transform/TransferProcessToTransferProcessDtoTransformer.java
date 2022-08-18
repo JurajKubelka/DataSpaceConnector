@@ -45,7 +45,10 @@ public class TransferProcessToTransferProcessDtoTransformer implements DtoTransf
                 .id(object.getId())
                 .type(object.getType().name())
                 .state(getState(object.getState(), context))
+                .stateTimestamp(object.getStateTimestamp())
                 .errorDetail(object.getErrorDetail())
+                .createdAt(object.getCreatedAt())
+                .updatedAt(object.getUpdatedAt())
                 .dataRequest(context.transform(object.getDataRequest(), DataRequestDto.class))
                 .dataDestination(
                         DataAddressInformationDto.Builder.newInstance()

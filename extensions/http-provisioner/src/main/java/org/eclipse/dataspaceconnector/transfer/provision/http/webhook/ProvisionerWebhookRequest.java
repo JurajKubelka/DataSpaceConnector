@@ -26,16 +26,16 @@ import org.eclipse.dataspaceconnector.spi.types.domain.Polymorphic;
 @JsonDeserialize(builder = ProvisionerWebhookRequest.Builder.class)
 @JsonTypeName("dataspaceconnector:provisioner-callback-request")
 public class ProvisionerWebhookRequest implements Polymorphic {
-    @NotNull
+    @NotNull(message = "resourceDefinitionId cannot be null")
     private String resourceDefinitionId;
     private boolean hasToken;
-    @NotNull
+    @NotNull(message = "assetId cannot be null")
     private String assetId;
-    @NotNull
+    @NotNull(message = "resourceName cannot be null")
     private String resourceName;
-    @NotNull
+    @NotNull(message = "contentDataAddress cannot be null")
     private DataAddress contentDataAddress;
-    @NotNull
+    @NotNull(message = "apiKeyJwt cannot be null")
     private String apiKeyJwt;
 
     private ProvisionerWebhookRequest() {
@@ -62,7 +62,7 @@ public class ProvisionerWebhookRequest implements Polymorphic {
         return hasToken;
     }
 
-    public String getApiToken() {
+    public String getApiKeyJwt() {
         return apiKeyJwt;
     }
 
@@ -104,7 +104,7 @@ public class ProvisionerWebhookRequest implements Polymorphic {
             return this;
         }
 
-        public Builder apiToken(String token) {
+        public Builder apiKeyJwt(String token) {
             request.apiKeyJwt = token;
             return this;
         }

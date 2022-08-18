@@ -14,7 +14,7 @@
 
 package org.eclipse.dataspaceconnector.aws.s3.provision;
 
-import net.jodah.failsafe.RetryPolicy;
+import dev.failsafe.RetryPolicy;
 import org.eclipse.dataspaceconnector.aws.s3.core.AwsSecretToken;
 import org.eclipse.dataspaceconnector.aws.s3.core.AwsTemporarySecretToken;
 import org.eclipse.dataspaceconnector.aws.s3.core.ClientProvider;
@@ -96,7 +96,7 @@ public class AwsProvisionExtension implements ServiceExtension {
         try {
             clientProvider.shutdown();
         } catch (Exception e) {
-            monitor.info("Error closing S3 client provider", e);
+            monitor.severe("Error closing S3 client provider", e);
         }
     }
 

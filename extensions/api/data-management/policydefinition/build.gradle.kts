@@ -24,21 +24,21 @@ plugins {
 }
 
 dependencies {
-    implementation(project(":core:policy:policy-evaluator"))
+    api(project(":spi:control-plane:contract-spi"))
+    api(project(":spi:control-plane:policy-spi"))
+    api(project(":spi:common:transaction-spi"))
     implementation(project(":common:util"))
+    implementation(project(":core:policy:policy-evaluator"))
     implementation(project(":extensions:api:api-core"))
     implementation(project(":extensions:api:data-management:api-configuration"))
-    implementation(project(":spi:policy-spi"))
-    implementation(project(":spi:contract-spi"))
-    implementation(project(":extensions:transaction:transaction-spi"))
 
     implementation("jakarta.ws.rs:jakarta.ws.rs-api:${rsApi}")
 
     testImplementation(project(":extensions:http"))
 
     testImplementation(project(":extensions:transaction:transaction-local"))
-    testImplementation(testFixtures(project(":common:util")))
-    testImplementation(testFixtures(project(":launchers:junit")))
+
+    testImplementation(project(":extensions:junit"))
     testImplementation("io.rest-assured:rest-assured:${restAssured}")
 }
 

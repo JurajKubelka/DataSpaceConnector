@@ -31,6 +31,11 @@ components:
     Asset:
       type: object
       properties:
+        createdAt:
+          type: integer
+          format: int64
+        id:
+          type: string
         properties:
           type: object
           additionalProperties:
@@ -70,20 +75,18 @@ components:
           format: date-time
         policy:
           $ref: '#/components/schemas/Policy'
-        policyId:
-          type: string
         provider:
           type: string
           format: uri
     Criterion:
       type: object
       properties:
-        left:
+        operandLeft:
           type: object
-        op:
+        operandRight:
+          type: object
+        operator:
           type: string
-        right:
-          type: object
     Duty:
       type: object
       properties:
@@ -165,8 +168,6 @@ components:
           items:
             $ref: '#/components/schemas/Prohibition'
         target:
-          type: string
-        uid:
           type: string
     Prohibition:
       type: object

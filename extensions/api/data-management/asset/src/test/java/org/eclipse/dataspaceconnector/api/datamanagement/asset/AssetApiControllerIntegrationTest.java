@@ -16,10 +16,12 @@
 package org.eclipse.dataspaceconnector.api.datamanagement.asset;
 
 import io.restassured.specification.RequestSpecification;
-import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.AssetDto;
 import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.AssetEntryDto;
+import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.AssetRequestDto;
+import org.eclipse.dataspaceconnector.api.datamanagement.asset.model.DataAddressDto;
 import org.eclipse.dataspaceconnector.dataloading.AssetLoader;
-import org.eclipse.dataspaceconnector.junit.launcher.EdcExtension;
+import org.eclipse.dataspaceconnector.junit.extensions.EdcExtension;
+import org.eclipse.dataspaceconnector.policy.model.Policy;
 import org.eclipse.dataspaceconnector.spi.asset.AssetIndex;
 import org.eclipse.dataspaceconnector.spi.contract.negotiation.store.ContractNegotiationStore;
 import org.eclipse.dataspaceconnector.spi.types.domain.DataAddress;
@@ -30,15 +32,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.Collections;
 import java.util.Map;
 import java.util.UUID;
 
 import static io.restassured.RestAssured.given;
 import static io.restassured.http.ContentType.JSON;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.eclipse.dataspaceconnector.api.datamanagement.asset.TestFunctions.createAssetEntryDto;
-import static org.eclipse.dataspaceconnector.api.datamanagement.asset.TestFunctions.createAssetEntryDto_emptyAttributes;
-import static org.eclipse.dataspaceconnector.common.testfixtures.TestUtils.getFreePort;
+import static org.eclipse.dataspaceconnector.junit.testfixtures.TestUtils.getFreePort;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.Matchers.is;
 
@@ -51,6 +52,8 @@ public class AssetApiControllerIntegrationTest {
     @BeforeEach
     void setUp(EdcExtension extension) {
         extension.setConfiguration(Map.of(
+                "web.http.port", String.valueOf(getFreePort()),
+                "web.http.path", "/api",
                 "web.http.data.port", String.valueOf(port),
                 "web.http.data.path", "/api/v1/data",
                 "edc.api.auth.key", authKey
@@ -129,8 +132,23 @@ public class AssetApiControllerIntegrationTest {
     }
 
     @Test
-    void postAsset_invalidBody(AssetIndex assetIndex) {
-        var assetDto = AssetDto.Builder.newInstance().properties(Map.of(Asset.PROPERTY_ID, "testId", "Asset-1", "An Asset")).build();
+    void postAsset_supportOldIdAsPropertyApi(AssetIndex assetIndex) {
+        var assetDto = AssetRequestDto.Builder.newInstance().properties(Map.of(Asset.PROPERTY_ID, "assetId", "Asset-1", "An Asset")).build();
+        var dataAddress = DataAddressDto.Builder.newInstance().properties(Map.of("type", "type", "asset-1", "/localhost")).build();
+        var assetEntryDto = AssetEntryDto.Builder.newInstance().asset(assetDto).dataAddress(dataAddress).build();
+
+        baseRequest()
+                .body(assetEntryDto)
+                .contentType(JSON)
+                .post("/assets")
+                .then()
+                .statusCode(204);
+        assertThat(assetIndex.findById("assetId")).isNotNull();
+    }
+
+    @Test
+    void postAsset_invalidBody_nullDataAddress(AssetIndex assetIndex) {
+        var assetDto = AssetRequestDto.Builder.newInstance().id("assetId").properties(Map.of("Asset-1", "An Asset")).build();
         var assetEntryDto = AssetEntryDto.Builder.newInstance().asset(assetDto).dataAddress(null).build();
 
         baseRequest()
@@ -222,7 +240,7 @@ public class AssetApiControllerIntegrationTest {
                 .providerAgentId(UUID.randomUUID().toString())
                 .consumerAgentId(UUID.randomUUID().toString())
                 .assetId(asset.getId())
-                .policyId("policyId")
+                .policy(Policy.Builder.newInstance().build())
                 .build();
     }
 
@@ -232,5 +250,17 @@ public class AssetApiControllerIntegrationTest {
                 .basePath("/api/v1/data")
                 .header("x-api-key", authKey)
                 .when();
+    }
+
+    private AssetEntryDto createAssetEntryDto(String id) {
+        var assetDto = AssetRequestDto.Builder.newInstance().id(id).properties(Map.of("Asset-1", "An Asset")).build();
+        var dataAddress = DataAddressDto.Builder.newInstance().properties(Map.of("type", "type", "asset-1", "/localhost")).build();
+        return AssetEntryDto.Builder.newInstance().asset(assetDto).dataAddress(dataAddress).build();
+    }
+
+    private AssetEntryDto createAssetEntryDto_emptyAttributes() {
+        var assetDto = AssetRequestDto.Builder.newInstance().properties(Collections.singletonMap("", "")).build();
+        var dataAddress = DataAddressDto.Builder.newInstance().properties(Collections.singletonMap("", "")).build();
+        return AssetEntryDto.Builder.newInstance().asset(assetDto).dataAddress(dataAddress).build();
     }
 }
